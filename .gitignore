@@ -1,0 +1,15 @@
+/artifacts/
+/dist/
+__pycache__/
+*.pyc
+*.log
+*.tmp
+
+# Generated files; source and runtime assets stay tracked.
+/build/
+/native/windows-x64/*.dll
+*.pdb
+*.obj
+*.lib
+*.exp
+*.zip

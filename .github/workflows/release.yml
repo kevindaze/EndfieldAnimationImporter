@@ -1,0 +1,89 @@
+name: Build and release EAI
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: eai-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      filename: ${{ steps.package.outputs.filename }}
+      prerelease: ${{ steps.package.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Configure Windows x64
+        run: cmake -S . -B build -A x64
+      - name: Compile from source
+        run: cmake --build build --config Release
+      - name: Native regression tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Web regression tests
+        run: node tests/ui_feedback_tests.cjs
+      - name: Package compiled runtime
+        id: package
+        run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --output-dir "${{ runner.temp }}/eai-package"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.filename }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: eai-publish-${{ needs.build.outputs.version }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.build.outputs.version }}
+      FILENAME: ${{ needs.build.outputs.filename }}
+      PRERELEASE: ${{ needs.build.outputs.prerelease }}
+      COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.filename }}
+          path: package
+      - name: Publish without overwriting existing versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+          releases=$(gh api --paginate "repos/${GH_REPO}/releases" --jq '.[].tag_name')
+          if grep -Fxq "$tag" <<< "$releases"; then
+            echo "Release $tag exists; unchanged. New build remains in Actions artifacts."
+            exit 0
+          fi
+          # If a tag already exists, never attach a different commit's binary.
+          tags=$(gh api --paginate "repos/${GH_REPO}/git/matching-refs/tags/v" --jq '.[] | [.ref, .object.type, .object.sha] | @tsv')
+          existing=$(awk -F '\t' -v ref="refs/tags/$tag" '$1 == ref {print $2 " " $3}' <<< "$tags")
+          if [[ -n "$existing" && "$existing" != "commit $COMMIT" ]]; then
+            echo "Existing tag is not the current commit. Use a new version or a lightweight matching tag."
+            exit 1
+          fi
+          options=()
+          if [[ "$PRERELEASE" == "true" ]]; then options+=(--prerelease); fi
+          gh release create "$tag" "package/$FILENAME" \
+            --target "$COMMIT" --title "EndfieldAnimationImporter $VERSION" \
+            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Requires BEM; FBX conversion requires Blender." \
+            "${options[@]}"

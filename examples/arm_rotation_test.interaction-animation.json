@@ -1,0 +1,102 @@
+{
+  "format": "endfield-interaction-animation",
+  "version": 1,
+  "id": "arm_rotation_test",
+  "name": "雙角色手臂旋轉測試",
+  "duration": 2.5,
+  "distance": 1.0,
+  "actors": [
+    {
+      "role": "controlled",
+      "tracks": [
+        {
+          "bone": "Bip001_R_Forearm",
+          "keys": [
+            {
+              "time": 0,
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            {
+              "time": 0.7,
+              "rotation": [
+                0,
+                0,
+                0.17364817766693033,
+                0.984807753012208
+              ]
+            },
+            {
+              "time": 1.6,
+              "rotation": [
+                0,
+                0,
+                0.17364817766693033,
+                0.984807753012208
+              ]
+            },
+            {
+              "time": 2.5,
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "role": "partner",
+      "tracks": [
+        {
+          "bone": "Bip001_R_Forearm",
+          "keys": [
+            {
+              "time": 0,
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            },
+            {
+              "time": 0.7,
+              "rotation": [
+                0,
+                0,
+                -0.17364817766693033,
+                0.984807753012208
+              ]
+            },
+            {
+              "time": 1.6,
+              "rotation": [
+                0,
+                0,
+                -0.17364817766693033,
+                0.984807753012208
+              ]
+            },
+            {
+              "time": 2.5,
+              "rotation": [
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

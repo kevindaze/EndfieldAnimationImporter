@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "id": "local.endfield.interaction",
+  "name": "EndfieldAnimationImporter",
+  "author": "Local Research",
+  "version": "1.0.1-Alpha",
+  "abi": 1,
+  "libraries": {
+    "windows-x64": "native/windows-x64/Endfield.Interaction.dll"
+  },
+  "ui": "ui/index.html",
+  "default_configuration": {},
+  "dependencies": [],
+  "description": "使用前請停用 BEM 相機模組並重啟遊戲。僅關閉第一人稱視角可能仍會佔用入口，造成連接失敗。"
+}

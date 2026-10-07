@@ -2,7 +2,7 @@
 
 繁體中文 | [English](README.en.md)
 
-適用版本：1.0.3-Alpha｜Windows x64｜2026-10-07
+適用版本：1.0.4-Alpha｜Windows x64｜2026-10-07
 
 模組在 BEM 中顯示為 **EndfieldAnimationImporter**。本版為 Alpha，使用前請閱讀相容性與限制。
 

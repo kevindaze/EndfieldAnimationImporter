@@ -22,4 +22,4 @@ Upload this directory as the repository root, including `.github`. Push and pull
 
 The workflow compiles and tests before packaging. To make another version, increment the third component for a small update or the second for a major feature update; the first component changes only on the owner's instruction.
 
-User manual changes remain opt-in; do not regenerate README on ordinary code changes. Blender is required for FBX conversion on the user's PC, not on the CI build runner. EFMI tests use synthetic fixtures and do not require any installed/private mods.
+Every version update must synchronize the applicable version in the Chinese and English READMEs, including their documentation and repository copies. Update manual content only when user operations, controls or workflows change. Record purely technical changes and validation in updateInfo; keep the rest of the manual unchanged. Do not replace historical/example version numbers globally. Blender is required for FBX conversion on the user's PC, not on the CI build runner. EFMI tests use synthetic fixtures and do not require any installed/private mods.

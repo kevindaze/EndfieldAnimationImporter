@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-Version: **1.0.3-Alpha** · Windows x64 · October 7, 2026
+Version: **1.0.4-Alpha** · Windows x64 · October 7, 2026
 
 The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
 

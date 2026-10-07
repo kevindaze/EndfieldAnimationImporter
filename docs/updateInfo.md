@@ -1,5 +1,11 @@
 # EndfieldAnimationImporter 更新紀錄
 
+## 1.0.2-Alpha（2026-10-07）
+
+- 修正 EFMI 橋接測試的路徑比較：使用 filesystem::equivalent 確認輸出位於所選實際資料夾，避免路徑正規化／Windows Junction 造成誤判。未停用橋接輸出位置檢查。
+- 增加含「.」路徑的正規化檢查，並以 TEMP 指向 Windows Junction 驗證。
+- 本機原生 8 項測試及 Junction 情境通過；重新編譯 DLL 與打包。GitHub 遠端需推送後再次確認，未新增遊戲內驗證。
+
 ## 1.0.1-Alpha（2026-10-07）
 
 - git-release 整理為可獨立建置的原始碼 repo：src、CMake、測試與必要 vendored headers。

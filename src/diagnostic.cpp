@@ -832,7 +832,7 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 1.0.1-Alpha initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 1.0.2-Alpha initialized; follow research is read-only; verified preview modes retained");
  if(!InteractionPanel::Start(PanelRead,PanelExecute))Log("Interaction overlay unavailable; use module web UI");
  if(!output)Log("Persistent log unavailable; Host retains only its recent diagnostic messages");
  return BE_Result_Ok;

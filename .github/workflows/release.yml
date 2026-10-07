@@ -35,6 +35,8 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Web regression tests
         run: node tests/ui_feedback_tests.cjs
+      - name: Language regression tests
+        run: node tests/language_tests.cjs
       - name: Package compiled runtime
         id: package
         run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --output-dir "${{ runner.temp }}/eai-package"

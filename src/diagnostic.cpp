@@ -282,7 +282,7 @@ bool BindLookTarget(Pose& candidate){
  if(matches!=1||!Living(candidate.parent)){Log("LookAt refused: unique instantiated Endministrator head not found in squad");Event("target_missing_or_ambiguous");return false;}
  PoseMath::Vector3 from{},to{};PoseMath::Quaternion rootRotation{};float yaw=0,pitch=0;
  if(!Value(Position,candidate.head,from)||!Value(Position,candidate.targetHead,to)||!Value(WorldRotation,candidate.root,rootRotation)||!PoseMath::Normalize(rootRotation)||
-  !PoseMath::LookAngles(PoseMath::Rotate(PoseMath::Inverse(rootRotation),{to.x-from.x,to.y-from.y,to.z-from.z}),yaw,pitch)){
+  (!IsPlaced(candidate.mode)&&!PoseMath::LookAngles(PoseMath::Rotate(PoseMath::Inverse(rootRotation),{to.x-from.x,to.y-from.y,to.z-from.z}),yaw,pitch))){
   Log("LookAt refused: invalid target distance/direction");Event("target_direction_invalid");return false;
  }
  Log("LookAt target="+ObjectName(candidate.targetModel)+"/Bip001_Head");return true;
@@ -344,8 +344,8 @@ bool BeginPose(Mode mode=Mode::HeadTest){
   auto& p=candidate.placement;auto& r=candidate.partnerPlacement;p.root=candidate.root;r.root=candidate.reverse.root;
   if(!Value(Position,p.root,p.start)||!Value(Position,r.root,r.start)||!Value(WorldRotation,p.root,p.startRotation)||!Value(WorldRotation,r.root,r.startRotation)||
    !PoseMath::Normalize(p.startRotation)||!PoseMath::Normalize(r.startRotation)||
-   !PoseMath::StandingAnchors(p.start,r.start,r.anchor,p.anchorRotation,r.anchorRotation)){
-   Log("Standing preview refused: stand on level ground 0.4-3m apart");Event("stand_on_flat_ground_near_partner");return false;
+   !PoseMath::StandingAnchors(p.start,r.start,r.anchor,p.anchorRotation,r.anchorRotation,p.startRotation)){
+   Log("Placement refused: invalid root position/rotation");Event("placement_transform_invalid");return false;
   }p.anchor=p.start;
  }
  if(mode==Mode::Handshake){
@@ -399,7 +399,7 @@ bool BeginPose(Mode mode=Mode::HeadTest){
   auto offsetB=PoseMath::Rotate(b.anchorRotation,PoseMath::Rotate(PoseMath::Inverse(b.startRotation),Handshake::Sub(shoulders[1],b.start)));
   const float reachA=candidate.arms[0].length+candidate.arms[1].length,reachB=candidate.arms[3].length+candidate.arms[4].length;
   float distance=std::clamp((reachA+reachB)*0.70f,0.32f,0.80f);
-  b.anchor=Handshake::Add(a.anchor,Handshake::Add(Handshake::Scale(line,distance),Handshake::Sub(offsetA,offsetB)));b.anchor.y=b.start.y;
+  b.anchor=Handshake::Add(a.anchor,Handshake::Add(Handshake::Scale(line,distance),Handshake::Sub(offsetA,offsetB)));b.anchor.y=a.anchor.y;
   Log("Handshake measured arms A="+std::to_string(reachA)+" B="+std::to_string(reachB)+" shoulder gap target="+std::to_string(distance));
  }
  if(mode==Mode::Custom){auto it=animationLibrary.find(selectedClip);if(it==animationLibrary.end()){Event("custom_animation_missing");return false;}candidate.clip=it->second;if(candidate.clip->absolute&&candidate.clip->targetCharacter!=Presets::Identity(ObjectName(candidate.targetModel))){CharacterMismatch("custom_target_character_mismatch",workflow.draft.controlled,candidate.clip->targetCharacter,Presets::Identity(ObjectName(candidate.targetModel)));return false;}
@@ -462,7 +462,7 @@ bool PlaceRoot(RootPlacement& p,float t,PoseMath::Vector3 anchor,PoseMath::Quate
  if(!Living(p.root)||!Value(LocalPosition,p.root,local)||!PoseMath::Finite(local)||!Rotation(p.root,rotation))return false;
  if(!p.positioned||!PoseMath::SamePosition(local,p.writtenLocal))p.baseLocal=local;
  if(!p.rotated||!PoseMath::SameRotation(rotation,p.writtenLocalRotation))p.baseLocalRotation=rotation;
- if(!WriteValue(SetPosition,p.root,PoseMath::Lerp(p.start,anchor,t)))return false;
+ if(!WriteValue(SetPosition,p.root,t>=1.f?anchor:PoseMath::Lerp(p.start,anchor,t)))return false;
  p.positioned=true;
  if(!Value(LocalPosition,p.root,p.writtenLocal))return false;
  if(!WriteValue(SetWorldRotation,p.root,PoseMath::Nlerp(p.startRotation,facing,t)))return false;
@@ -489,7 +489,7 @@ void ApplyPose(float dt=1.0f/60){
    StopPose("standing target/ownership invalid",true);return;
   }
   if(std::isfinite(dt)&&dt>0)pose.placementTime+=std::min(dt,0.05f);
-  const float t=std::clamp(pose.placementTime/0.6f,0.0f,1.0f);const float smooth=pose.mode==Mode::Custom?1.f:t*t*(3-2*t);
+  const float smooth=1.f; // Place immediately, including distant party members.
   auto mainAnchor=pose.placement.anchor,partnerAnchor=pose.partnerPlacement.anchor;auto mainFacing=pose.placement.anchorRotation,partnerFacing=pose.partnerPlacement.anchorRotation;
   if(pose.mode==Mode::Custom){auto scene=SceneLayout::Build(mainAnchor,mainFacing,partnerAnchor,partnerFacing,boneTarget.Get("0|@root"),boneTarget.Get("1|@root"));mainAnchor=scene.mainPosition;partnerAnchor=scene.partnerPosition;mainFacing=scene.mainRotation;partnerFacing=scene.partnerRotation;}
   if(!PlaceRoot(pose.placement,smooth,mainAnchor,mainFacing)||!PlaceRoot(pose.partnerPlacement,smooth,partnerAnchor,partnerFacing)){
@@ -832,7 +832,7 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 1.0.2-Alpha initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 1.0.4-Alpha initialized; follow research is read-only; verified preview modes retained");
  if(!InteractionPanel::Start(PanelRead,PanelExecute))Log("Interaction overlay unavailable; use module web UI");
  if(!output)Log("Persistent log unavailable; Host retains only its recent diagnostic messages");
  return BE_Result_Ok;

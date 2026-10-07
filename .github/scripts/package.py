@@ -32,7 +32,7 @@ def main():
     if manifest['libraries']['windows-x64'] != 'native/windows-x64/Endfield.Interaction.dll' or manifest['ui'] != 'ui/index.html':
         raise SystemExit('Unexpected runtime paths')
     files = {'module.json': ROOT / 'module.json', 'native/windows-x64/Endfield.Interaction.dll': dll,
-             'ui/index.html': ROOT / 'ui/index.html', 'tools/retarget_fbx.py': ROOT / 'tools/retarget_fbx.py',
+             'ui/index.html': ROOT / 'ui/index.html', 'ui/language-catalog.js': ROOT / 'ui/language-catalog.js', 'ui/language.js': ROOT / 'ui/language.js', 'tools/retarget_fbx.py': ROOT / 'tools/retarget_fbx.py',
              'NLOHMANN-LICENSE.MIT': ROOT / 'third_party/nlohmann/LICENSE.MIT',
              'BETTER-ENDFIELD-LICENSE.txt': ROOT / 'third_party/better-endfield/LICENSE'}
     motions = ROOT / 'native/windows-x64/motions'

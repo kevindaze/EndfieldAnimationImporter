@@ -1,6 +1,8 @@
 # EndfieldAnimationImporter 使用手冊
 
-適用版本：1.0.0-Alpha｜Windows x64｜2026-10-07
+繁體中文 | [English](README.en.md)
+
+適用版本：1.0.3-Alpha｜Windows x64｜2026-10-07
 
 模組在 BEM 中顯示為 **EndfieldAnimationImporter**。本版為 Alpha，使用前請閱讀相容性與限制。
 
@@ -51,6 +53,8 @@ flowchart TD
 ```
 
 ## 2. 面板與快捷鍵
+
+面板最左邊的語言選單可切換「中文（繁體）」與「English」，立即更新介面文字。遊戲內面板與 BEM 網頁各自保存語言偏好，不影響動畫 ID、骨架名稱及參數設定。
 
 | 按鍵／頁面 | 用途 |
 | --- | --- |
@@ -203,6 +207,7 @@ Blender 在背景執行，使用者不必手動操作 Blender，也不必把 FBX
 
 | 路徑 | 內容 |
 | --- | --- |
+| `ui-language.txt` | 遊戲內面板語言；網頁語言保存在瀏覽器本機儲存 |
 | `overlay-settings.json` | 面板、快捷鍵槽位、骨架參數、Blender 路徑等設定 |
 | `Animations\` | 本機動畫庫，每個動畫一份 JSON |
 | `animation-order.json` | 動畫列表順序 |

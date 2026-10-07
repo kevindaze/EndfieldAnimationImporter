@@ -32,11 +32,12 @@ inline Quaternion Nlerp(Quaternion a,Quaternion b,float t){
  const float n=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);
  return n>0?Quaternion{q.x/n,q.y/n,q.z/n,q.w/n}:a;
 }
-inline bool StandingAnchors(Vector3 a,Vector3 b,Vector3& partner,Quaternion& facing,Quaternion& partnerFacing){
- if(!Finite(a)||!Finite(b)||std::abs(a.y-b.y)>0.25f)return false;
- const float x=b.x-a.x,z=b.z-a.z,d=std::sqrt(x*x+z*z);
- if(d<0.4f||d>3.0f)return false;
- partner={a.x+x/d*1.2f,b.y,a.z+z/d*1.2f};
+inline bool StandingAnchors(Vector3 a,Vector3 b,Vector3& partner,Quaternion& facing,Quaternion& partnerFacing,Quaternion reference={}){
+ if(!Finite(a)||!Finite(b)||!Normalize(reference))return false;
+ // Placement depends on the controlled actor, never the partner's idle location.
+ const float x=2*(reference.x*reference.z+reference.w*reference.y),z=1-2*(reference.x*reference.x+reference.y*reference.y),d=std::hypot(x,z);
+ if(!std::isfinite(d)||d<1e-6f)return false;
+ partner={a.x+x/d*1.2f,a.y,a.z+z/d*1.2f};
  const float yaw=std::atan2(x,z)*57.29577951f;
  const float angle=yaw*0.00872664626f,other=(yaw+180)*0.00872664626f;
  facing={0,std::sin(angle),0,std::cos(angle)};partnerFacing={0,std::sin(other),0,std::cos(other)};return true;
@@ -56,7 +57,7 @@ inline Quaternion YawPitch(float yaw,float pitch){
 }
 inline bool LookAngles(Vector3 local,float& yaw,float& pitch){
  const float square=local.x*local.x+local.y*local.y+local.z*local.z;
- if(!std::isfinite(square)||square<0.04f||square>400.0f)return false;
+ if(!std::isfinite(square)||square<0.04f)return false;
  const float horizontal=std::sqrt(local.x*local.x+local.z*local.z);
  if(horizontal<0.05f)return false;
  yaw=std::clamp(std::atan2(local.x,local.z)*57.29577951f,-55.0f,55.0f);

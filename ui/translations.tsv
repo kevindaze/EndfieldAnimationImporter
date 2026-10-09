@@ -123,7 +123,6 @@ BEM 與 EFMI 可同時啟動；BEM 請選 XInput 自啟動。	BEM and EFMI can r
 選擇資料夾	Choose Folder
 掃描模組	Scan Mods
 清單來自 INI；不代表部件正在顯示。	The list comes from INI files; parts may not currently be visible.
-即時網格調整（未完成）	Live Mesh Adjustment (Unfinished)
 寫入橋接	Write Bridge
 停用橋接	Disable Bridge
 寫入後回遊戲重載 EFMI：	After writing, reload EFMI in-game: 
@@ -400,3 +399,34 @@ FBX / VMD 需本機 Blender；VMD 使用內建骨架，只匯入動作。	FBX / 
 同步主控/配角動畫	Sync main/partner animations
 ☑ 同步主控/配角動畫	☑ Sync main/partner animations
 ☐ 同步主控/配角動畫	☐ Sync main/partner animations
+
+請至校準區選擇動畫。結果：	Select an animation in calibration. Output: 
+
+輸入數值（可含負號與小數）：	Enter a number (negative and decimal allowed):
+請輸入範圍內的數字	Enter a number within this range
+此模組已全部還原預設；請寫入橋接並重載 EFMI	All mod defaults restored; write the bridge and reload EFMI
+自由相機	Free Camera
+☑ 啟用自由相機	☑ Enable Free Camera
+☐ 啟用自由相機	☐ Enable Free Camera
+啟用自由相機	Enable Free Camera
+啟用／關閉快捷鍵：	Toggle shortcut:
+重設相機位置	Reset Camera Position
+WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move; E/Q: ascend/descend; hold right mouse button to look.
+啟用時攔截遊戲操作；開啟面板時暫停相機操作。	Game input is blocked while enabled. Camera controls pause while the panel is open.
+關閉自由相機返回遊戲視角；失去焦點時自動關閉。	Disable to return to the game camera. Automatically disables on focus loss.
+自由相機已關閉	Free Camera disabled
+自由相機已啟用；遊戲操作已攔截	Free Camera enabled; game input blocked
+請先手動連接遊戲入口	Manually connect to the game first
+自由相機輸入攔截未接通，未啟用	Free Camera input interception unavailable; activation refused
+找不到可控制的遊戲相機，未啟用	Game camera unavailable; activation refused
+請先啟用自由相機	Enable Free Camera first
+無法取得角色位置	Character position unavailable
+自由相機已關閉：遊戲失去焦點	Free Camera disabled: game lost focus
+自由相機已關閉：場景或角色已變更	Free Camera disabled: scene or character changed
+自由相機寫入失敗，已關閉	Free Camera write failed; disabled
+等待遊戲更新啟用自由相機	Waiting for game update to enable Free Camera
+
+啟動相機時隱藏遊戲UI	Hide game UI when starting free camera
+
+主控動畫列表	Main Animation List
+互動動畫列表	Partner Animation List

@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-Version: **1.2.3-Alpha** · Windows x64 · October 8, 2026
+Version: **1.3.5-Alpha** · Windows x64 · October 9, 2026
 
 The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
 
@@ -12,7 +12,7 @@ EAI is a third-party module loaded through [Better Endfield (BEM)](https://githu
 
 EAI retargets humanoid FBX / VMD animations separately to the controlled Endministrator and a partner in your party. It provides in-game preview, character placement, bone adjustment, timeline seeking, animation clipping and numpad interaction presets. It recognizes the currently controlled male or female Endministrator and records that choice in presets.
 
-Single-character FBX animations can optionally use experimental procedural Endministrator poses. The external-model page supports EFMI mod scanning, parameter bridges and mesh transforms that require reloading. Live GPU mesh adjustment is unfinished.
+Single-character FBX animations can optionally use experimental procedural Endministrator poses. The external-model page supports EFMI mod scanning, parameter bridges and mesh transforms that require reloading.
 
 ## 1. Before You Start
 
@@ -64,6 +64,7 @@ Use the language menu at the **far left** of the panel to select **繁體中文*
 | Numpad 1–9 | Activate configured presets; enable hotkeys and Num Lock |
 | Animation Import | Blender path, Endministrator pose, FBX / VMD / animation JSON import and library |
 | Module Settings | Characters, calibration, timeline, bones and presets |
+| Free Camera | Camera toggle, shortcut and reset position |
 | External Models | EFMI scanning and bridge controls |
 
 For hotkey playback, **press the same key to stop**. Pressing another configured key stops the current animation and switches to that preset. Empty or disabled slots do nothing. If a character requirement is not met, follow the prompt to change the controlled Endministrator or partner.
@@ -98,9 +99,12 @@ These are procedural tracking poses, not a two-character animation contained in 
 
 ### Import a Controlled Animation
 
+The controlled and partner FBX/VMD file pickers remember their last import folders separately across game restarts. Missing folders fall back to the default location.
+
+
 1. Control the male or female Endministrator you want to bind, connect to the game, select a party partner and stop playback.
 2. In Animation Import, select **Import Controlled FBX / VMD** and choose the file.
-3. On completion, the generated controlled animation is selected and activated automatically.
+3. On completion, the animation is added to the library without selecting it or starting a preview. You can continue importing other animations.
 4. Preview or edit the controlled timeline under **Module Settings → Calibration → Controlled Animation Calibration**. Choose the partner animation in its separate group.
 5. Use the shared **Prepare for Interaction Presets**, then apply the prepared setting to a numpad slot. The same preset stores both animation choices, the controlled pose, separate supports and bone parameters.
 
@@ -108,7 +112,7 @@ Controlled animations bind to the male or female Endministrator used during impo
 
 ### Full Animations and Character Binding
 
-Import saves the **full animation**, without automatically creating playable segments. Older segmented items may remain in your library.
+Import only updates the library; select an animation in calibration when you want to preview it. Import saves the **full animation**, without automatically creating playable segments. Older segmented items may remain in your library.
 
 Generated names include the source and bound character, plus the additional pose when applicable. The conversion targets that character's skeleton reference. Renaming the character does not reliably retarget it to another operator. Select the other operator and reimport the FBX instead.
 
@@ -149,6 +153,8 @@ There is no separate calibration-enable switch. Playing or using the timeline en
 One decimal place is display precision; internal timing retains floating-point precision. Timeline clipping primarily applies to imported animations. Built-in test motions may not offer equivalent timeline controls.
 
 ### Bones and Placement
+
+Bone parameter values: click the number to the right of a slider, enter a number (negative and decimal values are supported), then Save. Cancel discards the edit. Values must remain within the parameter range.
 
 Under **Bone Settings**, select **Refresh All Bones**, then expand the controlled character or partner and the relevant categories.
 
@@ -205,6 +211,20 @@ Animation saving controls appear after entering preview; paused preview also qua
 
 Presets record the male/female Endministrator and partner requirements. Slots display animation names. Deleting a referenced animation leaves the slot but marks the animation missing. Importing an animation with the same ID can update that library item.
 
+## Free Camera
+
+The **Free Camera** tab is immediately left of **External Models** (EFMI). Manually connect first, then use the configured shortcut to toggle free camera. The default toggle shortcut is **F9**; change and save it on this tab. WASD, E, Q, Num0 and Esc are reserved and cannot be used as the toggle shortcut.
+
+| Control | Function |
+| --- | --- |
+| WASD | Move forward, backward, left and right |
+| E / Q | Ascend / descend |
+| Hold right mouse button and move | Look around |
+| Reset Camera Position | Return near the controlled character |
+| Press toggle shortcut | Return to normal game view |
+
+Game action dispatch, key/axis reads and mouse input are intercepted while enabled; animations continue. Camera controls pause while the EAI panel is open. Num0/Esc retain panel behavior. Game input resumes after held keys are released. OS switching such as Alt+Tab remains available. Focus loss, camera changes or controlled-character changes disable Free Camera. Activation is refused if required input hooks cannot be installed; details are logged. Disable BEM first-person/camera modules first. Complete shortcut interception still requires in-game verification.
+
 ## 7. External Models (Partially Available)
 
 This provides general EFMI mod scanning and bridges; it is not limited to a particular wing mod.
@@ -217,7 +237,7 @@ This provides general EFMI mod scanning and bridges; it is not limited to a part
 
 Mods and individual meshes provide reset controls. After resetting, write the bridge and reload again. Disabling the bridge also needs a reload; EFMI's own saved parameter values may remain.
 
-**Live Mesh Adjustment (Unfinished) is not a verified working live feature.** Some mesh changes have been confirmed after writing the bridge and reloading with F10. Live GPU connection remains unverified.
+To apply mesh transforms, write the bridge and reload EFMI using its reload key (usually F10).
 
 The scan comes from INI files, resources and descriptions; it does not prove that every listed part is visible. Wings, horns or clothing added through EFMI's rendering pipeline may not be Unity skeleton nodes. They cannot necessarily be driven like bones every frame. Actual Unity Transform parts require matching descriptions and runtime nodes.
 
@@ -254,7 +274,7 @@ Files saved through native Save As go to your chosen location, separately from t
 | Settings refer to a missing animation | Import animation JSON with the matching ID first |
 | Feet penetrate ground / wrong height | Pause on a frame; check support and root Y. Automatic terrain correction is not provided |
 | Poor hand contact | Test the FBX with Endministrator pose None and Free support, then calibrate; additional poses are experimental |
-| External mesh does not update live | Write the bridge and reload EFMI; live adjustment is unfinished |
+| External mesh does not update | Write the bridge and reload EFMI |
 
 FBX input checks currently allow **512 MiB**, source animation duration **0.2 seconds to 1 hour**, and a **5-minute** background conversion timeout. Converted animation JSON and individual playable animations have no separate maximum file-size/duration cap, but remain limited by memory, format and hardware. The library allows up to 128 items.
 
@@ -268,4 +288,8 @@ The module log is `Interaction.Diagnostics.log` beside the DLL. FBX import direc
 
 Authors must check rights and attribution for animations, appearance assets and bundled resources before publication. Automated builds and tests do not establish compatibility with every game version or mod combination.
 
-Enable “Sync main/partner animations” in either calibration section to share playback, stop, pause, seeking/frame steps, and in/out markers. Both checkboxes share one state. Times use the same seconds and clamp to each clip’s duration; disable sync for independent controls. Play and stop keep the panel open; press Num0 or Esc to close it. Main FBX/VMD import is on the left and main pose presets on the right. Importing or selecting a main animation activates it directly.
+Enable “Sync main/partner animations” in either calibration section to share playback, stop, pause, seeking/frame steps, and in/out markers. Both checkboxes share one state. Times use the same seconds and clamp to each clip’s duration; disable sync for independent controls. Play and stop keep the panel open; press Num0 or Esc to close it. Main import and pose presets appear above partner FBX/VMD and JSON import. Main and partner animations have separate lists. Importing or selecting a main animation activates it directly.
+
+Enable “Hide game UI when starting free camera” to hide the game interface during free camera and restore its original visibility on exit. This preference is saved. The EAI panel and performance overlay remain visible. Hold Shift to double camera movement speed.
+
+Free camera is toggled only with its configured shortcut; there is no activation checkbox. Confirm the shortcut on the Free Camera tab, close the panel with Num0 or Esc, then press that key to enter or exit.

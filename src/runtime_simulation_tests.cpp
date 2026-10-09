@@ -9,6 +9,11 @@ struct Object {std::string name;Object* parent=nullptr;std::vector<Object*> chil
 Object entity{},go{"chr_0003_endminf_postmodel(Clone)#test"},root{"root"},neck{"Bip001_Neck"},head{"Bip001_Head"},body{"body"},weapon{"weapon"},weaponRoot{"weapon-root"},array{"array"};
 Object targetEntity{},targetGo{"chr_0004_pelica_postmodel(Clone)#test"},targetRoot{"target-root"},targetNeck{"Bip001_Neck"},targetHead{"Bip001_Head"},manager{};
 Object targetBody{"target-body"},targetArray{"target-array"};
+Object camera{"game-camera"},canvasA{"canvasA"},canvasB{"canvasB"},canvasArray{"canvas-array"};bool canvasAEnabled=true,canvasBEnabled=false;
+int inputCalls=0;bool gameInputEnabled=true;
+bool __fastcall InputBool(void*,uintptr_t,void*){++inputCalls;return true;}
+float __fastcall InputAxis(void*,uintptr_t,void*){++inputCalls;return .75f;}
+void __fastcall InputCheck(void*,void*){++inputCalls;}
 std::map<const void*,uint64_t> owners;const void* busyRoot=nullptr;bool failPartner=false;uint64_t sequence=100;
 bool failTargetPlacement=false;
 const void* failedArm=nullptr;
@@ -25,11 +30,12 @@ template<class T> void* Box(T value){std::memcpy(boxed,&value,sizeof(value));ret
 void* BE_CALL Invoke(void*,const void* method,void* self,void** args,void** exception){
  auto key=static_cast<Key>(reinterpret_cast<uintptr_t>(method)-1);auto object=static_cast<Object*>(self);
  switch(key){
+ case FindCanvases:return &canvasArray;case UiEnabled:return Box(self==&canvasA?canvasAEnabled:canvasBEnabled);case SetUiEnabled:(self==&canvasA?canvasAEnabled:canvasBEnabled)=*static_cast<bool*>(args[0]);return nullptr;case CameraMain:return &camera;case InputRootGroup:return Box(1);case InputGroupEnabled:return Box(gameInputEnabled);case InputToggleAll:gameInputEnabled=*static_cast<bool*>(args[0]);return nullptr;
  case Main:return &entity;case Model:return self==&targetEntity?&targetGo:&go;case ModelGo:return self;
  case Name:return object?&object->name:nullptr;case GoTransform:return self==&targetGo?&targetRoot:&root;
- case ComponentTransform:return self==&body?&root:self==&targetBody?&targetRoot:&weaponRoot;
+ case ComponentTransform:return self==&camera?&camera:self==&body?&root:self==&targetBody?&targetRoot:&weaponRoot;
  case Components:return self==&targetGo?&targetArray:&array;case Length:return Box(self==&targetArray?1:2);
- case Item:return self==&targetArray?&targetBody:*static_cast<int*>(args[0])==0?&body:&weapon;
+ case Item:if(self==&canvasArray)return *static_cast<int*>(args[0])==0?&canvasA:&canvasB;return self==&targetArray?&targetBody:*static_cast<int*>(args[0])==0?&body:&weapon;
  case ChildCount:return Box(static_cast<int>(object->children.size()));
  case Child:return object->children.at(*static_cast<int*>(args[0]));
  case Parent:return object->parent;case Alive:return Box(args[0]!=nullptr);
@@ -349,6 +355,9 @@ StopPose("scene B restore",true);Check(pins==0&&owners.empty()&&PoseMath::SamePo
  auto mainJson=absolute;mainJson["id"]="controlled_test";mainJson["name"]="controlled test";mainJson["target_character"]="chr_0003_endminf";mainJson["actors"][0]["role"]="controlled";mainJson["actors"][0]["tracks"][0]["keys"][0]["rotation"]={0,0,0,1};mainJson["actors"][0]["tracks"][0]["keys"][1]["rotation"]={0,.5f,0,.8660254f};
  ImportedAnimation::Clip mainParsed;Check(mainParsed.Read(mainJson)&&mainParsed.targetActor==0,"controlled v2 clip accepts administrator binding");auto badMain=mainJson;badMain["manager_action"]="standing";Check(!mainParsed.Read(badMain),"controlled source rejects overlapping procedural manager layer");
  Check(ImportAnimation(mainJson),"controlled clip imports into library");
+ {auto beforeDraft=Workflow::EntryJson(workflow.draft);auto beforePreview=pendingPreview;auto beforePins=pose.pins.get();auto partnerImport=absolute;partnerImport["id"]="library_only_partner";auto mainImport=mainJson;mainImport["id"]="library_only_main";
+ Check(ImportAnimation(partnerImport)&&ImportAnimation(mainImport)&&animationLibrary.contains("library_only_partner")&&animationLibrary.contains("library_only_main"),"consecutive partner/main imports add both library entries");
+ Check(Workflow::EntryJson(workflow.draft)==beforeDraft&&pendingPreview==beforePreview&&pose.pins.get()==beforePins,"library imports preserve selection and do not queue preview or acquire skeleton control");}
  workflow.draft=Presets::Entry{};workflow.draft.enabled=true;workflow.draft.animation="clip:absolute_test";workflow.draft.controlledAnimation="clip:controlled_test";workflow.draft.controlledPose="imported";workflow.draft.controlledSupport="none";controlledSupport="none";supportTarget="none";boneTarget=Bones::Settings{};gripTarget=Grip::Settings{};calibrationLoop=controlledLoop=false;timelineDraft={};mainTimelineDraft={};pendingSelectionStop=false;pendingPreview=false;pendingMainSeek.reset();pendingSeek.reset();hook=1;restoreRequested=false;
  auto mainBefore=head.rotation,partnerBefore=targetHead.rotation;
  SelectCalibrationAnimation(true);PumpCalibrationPreview();Check(pose.pins&&pose.controlledClip&&pose.mainPaused&&pose.clipPaused&&SelectedTimelineActive(true)&&SelectedTimelineActive(),"main selection binds both clips with independent paused clocks");
@@ -369,8 +378,8 @@ StopPose("scene B restore",true);Check(pins==0&&owners.empty()&&PoseMath::SamePo
  TimelineAction(InteractionPanel::Action::Step,1,0,false);PumpPose(0);Check(std::abs(pose.mainTime-pose.clipTime)<1e-5f,"partner synchronized step updates main clock");
  TimelineAction(InteractionPanel::Action::MarkIn,0,0,true);Check(std::abs(pose.mainStart-pose.rangeStart)<1e-5f,"synchronized mark-in updates both ranges");
  TimelineAction(InteractionPanel::Action::Seek,0,.8f,false);PumpPose(0);TimelineAction(InteractionPanel::Action::MarkOut,0,0,false);Check(std::abs(pose.mainEnd-pose.rangeEnd)<1e-5f,"synchronized mark-out updates both ranges");
- TimelineAction(InteractionPanel::Action::TimelinePlay,0,0,true);Check(!pose.mainPaused&&!pose.clipPaused,"synchronized play resumes both actors");
- TimelineAction(InteractionPanel::Action::Pause,0,0,false);Check(pose.mainPaused&&pose.clipPaused,"synchronized pause pauses both actors");
+ TimelineAction(InteractionPanel::Action::TimelinePlay,0,0,true);PumpPose(.03f);Check(!pose.mainPaused&&!pose.clipPaused&&std::abs(pose.mainTime-pose.clipTime)<1e-5f,"synchronized play remains running for both actors after deferred seek is applied");
+ TimelineAction(InteractionPanel::Action::Pause,0,0,false);PumpPose(0);Check(pose.mainPaused&&pose.clipPaused,"synchronized pause pauses both actors");TimelineAction(InteractionPanel::Action::Pause,0,0,false);PumpPose(.03f);Check(!pose.mainPaused&&!pose.clipPaused&&std::abs(pose.mainTime-pose.clipTime)<1e-5f,"partner toggle resumes both actors after gameplay tick");TimelineAction(InteractionPanel::Action::Pause,0,0,true);PumpPose(0);Check(pose.mainPaused&&pose.clipPaused,"main toggle pauses both actors after gameplay tick");TimelineAction(InteractionPanel::Action::Pause,0,0,true);PumpPose(.03f);Check(!pose.mainPaused&&!pose.clipPaused&&std::abs(pose.mainTime-pose.clipTime)<1e-5f,"main toggle resumes both actors after gameplay tick");
  QueueCalibrationStop(true);Check(pendingMainStop&&pendingPartnerStop,"synchronized stop queues both actors");PumpPose(0);Check(!pose.pins,"synchronized stop restores both actors and releases scene");
  {BE_ThirdPartyHostV1 syncHost{};host=&syncHost;active=true;PanelExecute({InteractionPanel::Action::SyncAnimations});active=false;host=nullptr;}Check(!syncAnimations,"shared sync control toggles off");
 
@@ -380,6 +389,32 @@ StopPose("scene B restore",true);Check(pins==0&&owners.empty()&&PoseMath::SamePo
  {Object mainFoot{"Bip001_L_Foot"};mainFoot.parent=&root;mainFoot.hierarchical=true;mainFoot.position={.1f,0,0};root.children.push_back(&mainFoot);workflow.draft.support="none";workflow.draft.controlledSupport="left_foot";Check(PrepareCalibration(workflow.draft)&&BeginPose(armedMode)&&pose.mainSupport.mode=="left_foot"&&ApplySupport(0),"controlled support binds actor zero bones and uses its own lease");StopPose("main support restore",true);root.children.pop_back();}
  workflow.draft.controlledSupport="none";workflow.draft.animation="standing";Check(PrepareCalibration(workflow.draft)&&BeginPose(armedMode)&&pose.controlledClip,"controlled-only custom motion starts without a partner imported asset");StopAnimationActor(0);Check(!pose.pins&&pins==0&&owners.empty(),"stopping the sole controlled motion restores the complete preview");
  hook=importHook;selectedControlledClip.clear();controlledPose="inherit";controlledSupport="none";pendingPreview=false;pendingSelectionStop=false;
+ // Exercise input gates and camera lifecycle through the real module logic.
+ cameraInputHooks[0].next=reinterpret_cast<void*>(&InputBool);FreeCameraInput::blocked=false;inputCalls=0;
+ Check(CameraGate<0>::BoolInstance(nullptr,87,nullptr)&&inputCalls==1,"game key reads forward before camera mode");
+ FreeCameraInput::toggleRequests=1;Check(!CameraGate<0>::BoolInstance(nullptr,87,nullptr)&&inputCalls==1,"toggle key is quarantined before the camera-tail activation callback");FreeCameraInput::toggleRequests=0;
+ FreeCameraInput::blocked=true;Check(!CameraGate<0>::BoolInstance(nullptr,87,nullptr)&&inputCalls==1,"camera mode suppresses game key reads without forwarding");
+ cameraInputHooks[0].next=reinterpret_cast<void*>(&InputAxis);Check(CameraGate<0>::AxisInstance(nullptr,0,nullptr)==0&&inputCalls==1,"camera mode zeroes game movement axes");
+ cameraInputHooks[0].next=reinterpret_cast<void*>(&InputCheck);CameraGate<0>::Check(nullptr,nullptr);Check(inputCalls==1,"camera mode blocks game action dispatch");
+ FreeCameraInput::blocked=false;CameraGate<0>::Check(nullptr,nullptr);Check(inputCalls==2,"game action dispatch resumes on release");
+ FreeCameraInput::Clear();FreeCameraInput::keys['W']=true;FreeCameraInput::blocked=true;PumpFreeCamera(0);Check(FreeCameraInput::blocked,"held camera keys keep game input quarantined after exit");
+ FreeCameraInput::keys['W']=false;PumpFreeCamera(0);Check(!FreeCameraInput::blocked,"all released keys restore game input");
+ auto cameraHook=hook;hook=1;FreeCameraInput::ready=false;Check(!BeginFreeCamera()&&!freeCamera.enabled&&!FreeCameraInput::blocked,"camera activation fails closed when input interception is unavailable");
+ cameraInputManager=&manager;cameraInputReady=true;cameraPushReady=true;FreeCameraInput::ready=true;camera.position={3,4,5};camera.rotation=PoseMath::YawPitch(20,10);
+ Check(BeginFreeCamera()&&freeCamera.enabled&&FreeCameraInput::blocked,"camera activation captures camera and suppresses input together");
+ uiCanvas.type_object=&canvasArray;freeCamera.hideUi=true;PumpCameraUi();Check(!canvasAEnabled&&!canvasBEnabled,"camera hides enabled canvas and retains originally hidden UI");
+ Check(!gameInputEnabled,"free camera disables the actual game input group");auto cameraPosition=camera.position;auto cameraRotation=camera.rotation;camera.position={99,99,99};camera.rotation={};Check(ResetFreeCamera()&&PoseMath::Finite(freeCamera.view.position),"reset computes view near controlled actor");
+ freeCamera.wrote=true;freeCamera.writtenPosition=camera.position;freeCamera.writtenRotation=camera.rotation;Check(ObserveGameCamera()&&PoseMath::SamePosition(freeCamera.savedPosition,cameraPosition)&&PoseMath::SameRotation(freeCamera.savedRotation,cameraRotation),"our own camera output never replaces game restoration baseline");
+ StopFreeCamera();Check(canvasAEnabled&&!canvasBEnabled,"camera restores original canvas visibility");freeCamera.hideUi=false;Check(gameInputEnabled,"exit restores game input group");Check(!freeCamera.enabled&&PoseMath::SamePosition(camera.position,cameraPosition)&&PoseMath::SameRotation(camera.rotation,cameraRotation),"camera exit restores captured game view");
+ gameInputEnabled=false;Check(BeginFreeCamera(),"camera enables when game input was already disabled");
+ auto wasActive=active.load();auto oldUnityThread=unityThread;active=true;unityThread=GetCurrentThreadId();
+ freeCamera.view.position={20,30,40};cameraPushNext=[](void*,void*,void*){camera.position={7,8,9};camera.rotation={};};
+ CameraPushDetour(nullptr,nullptr,nullptr);Check(PoseMath::SamePosition(camera.position,{20,30,40}),"final camera callback reapplies free view after game's camera overwrite");
+ StopFreeCamera();Check(!gameInputEnabled&&PoseMath::SamePosition(camera.position,{7,8,9}),"exit retains original disabled input and latest game camera view");
+ active=wasActive;unityThread=oldUnityThread;cameraPushNext=nullptr;gameInputEnabled=true;
+ Check(BeginFreeCamera(),"camera can enable again after restore");FreeCameraInput::focusLost=true;PumpFreeCamera(0);Check(!freeCamera.enabled&&freeCamera.status.find("失去焦點")!=std::string::npos,"focus-loss latch closes camera even if focus returned before the game tick");
+ FreeCameraInput::Clear();PumpFreeCamera(0);Check(!FreeCameraInput::blocked&&pins==0,"camera exit releases input and managed references");
+ cameraInputReady=false;cameraPushReady=false;FreeCameraInput::ready=false;hook=cameraHook;cameraInputHooks[0]={};
  return failures?1:0;
 }
 

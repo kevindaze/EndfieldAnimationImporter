@@ -67,3 +67,30 @@ Web requests identify the actor with `actor: "controlled"` (default partner).
 Timeline replies/events always use `timeline` for the partner and
 `controlled_timeline` for the controlled actor. Numpad presets start both clocks
 together. UI calibration preview preserves the other actor's current clock.
+
+
+## GitHub 自動打包與發布
+
+以 `G:/Project/endfield-mod/git-release` 作為 Git 儲存庫根目錄，上傳此目錄的內容，不要在 GitHub 再包一層 git-release。
+
+1. 在 GitHub 建立空白儲存庫，記下 HTTPS URL。
+2. 在 git-release 開啟 PowerShell，執行下列命令，將 URL 換成你的儲存庫：
+
+```powershell
+cd G:\Project\endfield-mod\git-release
+git init -b main
+git add .
+git commit -m "Add EAI runtime package and automatic release"
+git remote add origin https://github.com/YOUR-NAME/YOUR-REPO.git
+git push -u origin main
+```
+
+每次分支 push 都會打包；預設分支會發布新版本至 Releases。其他分支僅供 Actions 下載測試 ZIP。也能在 Actions 選擇 Build and release EAI → Run workflow 手動執行。
+
+版本取自 module.json 的 version。例如 1.0.0-Alpha 會產生 EndfieldAnimationImporter-1.0.0-Alpha-win-x64.zip 與 v1.0.0-Alpha Release。Alpha 等後綴自動標記為預發布。以後更新版本號、提交模組檔案並 push 即可。
+
+既有同版本 Release 不修改、不覆蓋；若要發布更新，先更新版本號。每次 push 的 ZIP 仍可在 Actions 該次執行的 Artifacts 下載（下載的外層 artifact ZIP 內含真正模組 ZIP，請取出模組 ZIP 給 Better Endfield 使用）。
+
+流程先在 Windows 編譯 C++ 與執行測試，再封裝新 DLL 及執行資源。原始碼、測試、docs 與外部模型描述不放進 ZIP；必要 motions 資料與第三方授權保留。詳細建置方式參考 repo 的 BUILDING.md。
+
+若 Actions 因組織權限或標籤規則拒絕建立 Release，需在儲存庫／組織設定允許工作流程寫入 contents 與建立版本標籤。首次雲端執行仍須在上傳後確認。

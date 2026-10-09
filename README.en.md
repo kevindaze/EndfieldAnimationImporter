@@ -73,6 +73,8 @@ BEM's module web page also provides controls. Its FBX picker, Blender folder pic
 
 ## 3. Import an FBX
 
+Main import controls appear above partner controls. Main and partner animations have separate lists. Each file picker remembers its last import folder. Importing adds animations to the library without starting playback.
+
 For the first test, use normally standing characters, select **None** for the Endministrator pose and **Free** support. This makes the source animation easier to assess.
 
 1. Stop the current animation and select the intended partner.
@@ -152,6 +154,8 @@ There is no separate calibration-enable switch. Playing or using the timeline en
 
 One decimal place is display precision; internal timing retains floating-point precision. Timeline clipping primarily applies to imported animations. Built-in test motions may not offer equivalent timeline controls.
 
+Enable “Sync main/partner animations” to share play, stop, resume/pause, seeking/frame steps and in/out markers. Both use the same seconds, clamped to each clip’s duration. Disable sync for independent controls. Playback controls keep the panel open; close it with Num0 or Esc.
+
 ### Bones and Placement
 
 Bone parameter values: click the number to the right of a slider, enter a number (negative and decimal values are supported), then Save. Cancel discards the edit. Values must remain within the parameter range.
@@ -223,7 +227,9 @@ The **Free Camera** tab is immediately left of **External Models** (EFMI). Manua
 | Reset Camera Position | Return near the controlled character |
 | Press toggle shortcut | Return to normal game view |
 
-Game action dispatch, key/axis reads and mouse input are intercepted while enabled; animations continue. Camera controls pause while the EAI panel is open. Num0/Esc retain panel behavior. Game input resumes after held keys are released. OS switching such as Alt+Tab remains available. Focus loss, camera changes or controlled-character changes disable Free Camera. Activation is refused if required input hooks cannot be installed; details are logged. Disable BEM first-person/camera modules first. Complete shortcut interception still requires in-game verification.
+Confirm the shortcut on the Free Camera tab, close the panel with Num0 or Esc, then press that key to enter or exit. Camera controls pause while the panel is open. Leaving the game window automatically exits free camera. Disable BEM first-person/camera modules before use.
+
+Enable “Hide game UI when starting free camera” to hide the game interface and restore it on exit. This preference is saved. The EAI panel and performance overlay remain visible. Hold Shift to double movement speed.
 
 ## 7. External Models (Partially Available)
 
@@ -268,7 +274,7 @@ Files saved through native Save As go to your chosen location, separately from t
 | --- | --- |
 | Connection fails / hook occupied | Disable BEM's camera module, restart and check BEM's module log |
 | Blender not found | Choose a folder containing blender.exe and check Current path |
-| FBX import requires stopping | Selecting an animation can start paused preview; stop it before importing |
+| FBX import requires stopping | Stop active playback or calibration before importing |
 | Character mismatch | Use the required Endministrator/operator; reimport FBX for another operator |
 | Exported clip missing from library | Save As does not add an item; import its JSON or use Save Animation |
 | Settings refer to a missing animation | Import animation JSON with the matching ID first |
@@ -285,11 +291,3 @@ Supported source rigs primarily include Mixamo and the currently supported Choco
 Include EAI and BEM versions, controlled Endministrator, partner, animation name, additional pose, support mode, reproduction steps and screenshots. State whether an animation problem already exists in the FBX or appears only after import.
 
 The module log is `Interaction.Diagnostics.log` beside the DLL. FBX import directories contain `result.json` and `conversion-report.json`. For bone/placement issues, provide values and screenshots paused on the same frame.
-
-Authors must check rights and attribution for animations, appearance assets and bundled resources before publication. Automated builds and tests do not establish compatibility with every game version or mod combination.
-
-Enable “Sync main/partner animations” in either calibration section to share playback, stop, pause, seeking/frame steps, and in/out markers. Both checkboxes share one state. Times use the same seconds and clamp to each clip’s duration; disable sync for independent controls. Play and stop keep the panel open; press Num0 or Esc to close it. Main import and pose presets appear above partner FBX/VMD and JSON import. Main and partner animations have separate lists. Importing or selecting a main animation activates it directly.
-
-Enable “Hide game UI when starting free camera” to hide the game interface during free camera and restore its original visibility on exit. This preference is saved. The EAI panel and performance overlay remain visible. Hold Shift to double camera movement speed.
-
-Free camera is toggled only with its configured shortcut; there is no activation checkbox. Confirm the shortcut on the Free Camera tab, close the panel with Num0 or Esc, then press that key to enter or exit.

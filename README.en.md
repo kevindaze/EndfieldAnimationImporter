@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-Version: **1.0.4-Alpha** · Windows x64 · October 7, 2026
+Version: **1.2.3-Alpha** · Windows x64 · October 8, 2026
 
 The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
 
@@ -10,7 +10,7 @@ The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is
 
 EAI is a third-party module loaded through [Better Endfield (BEM)](https://github.com/Dr-hydra/Better-Endfield). Install BEM before downloading and using this module.
 
-EAI retargets humanoid FBX animations to a partner character in your party. It provides in-game preview, character placement, bone adjustment, timeline seeking, animation clipping and numpad interaction presets. It recognizes the currently controlled male or female Endministrator and records that choice in presets.
+EAI retargets humanoid FBX / VMD animations separately to the controlled Endministrator and a partner in your party. It provides in-game preview, character placement, bone adjustment, timeline seeking, animation clipping and numpad interaction presets. It recognizes the currently controlled male or female Endministrator and records that choice in presets.
 
 Single-character FBX animations can optionally use experimental procedural Endministrator poses. The external-model page supports EFMI mod scanning, parameter bridges and mesh transforms that require reloading. Live GPU mesh adjustment is unfinished.
 
@@ -19,7 +19,7 @@ Single-character FBX animations can optionally use experimental procedural Endmi
 | Requirement | Details |
 | --- | --- |
 | Runtime | Windows x64, the game, and a BEM version capable of loading this module |
-| FBX conversion | Install Blender locally; Blender is not included |
+| FBX / VMD conversion | Install Blender locally; Blender is not included |
 | Animation JSON | Use EAI animation JSON. Playback does not require running Blender again |
 | Controlled character | Male or female Endministrator |
 | Partner | Must be in the party, with its model instantiated by the game |
@@ -44,8 +44,8 @@ Back up the data directory listed below before updating if needed. EAI and BEM h
 
 ```mermaid
 flowchart TD
-    A[Connect to Game → Select Partner] --> B[Confirm Blender Path → Import FBX]
-    B --> C[Select Animation → Calibrate Placement, Bones and Support]
+    A[Connect to Game → Select Partner] --> B[Confirm Blender Path → Import Partner / Controlled FBX or VMD]
+    B --> C[Select Each Animation → Calibrate Placement, Bones and Support]
     C --> D[Prepare for Interaction Presets]
     D --> E[Select Numpad Slot 1–9 → Apply Prepared Settings]
     E --> F[Save Settings → Enable Hotkeys and Num Lock]
@@ -62,7 +62,7 @@ Use the language menu at the **far left** of the panel to select **繁體中文*
 | Esc | Return to the game while editing the panel |
 | Mouse wheel | Scroll; use section arrows to collapse or expand content |
 | Numpad 1–9 | Activate configured presets; enable hotkeys and Num Lock |
-| Animation Import | Blender path, Endministrator pose, FBX / animation JSON import and library |
+| Animation Import | Blender path, Endministrator pose, FBX / VMD / animation JSON import and library |
 | Module Settings | Characters, calibration, timeline, bones and presets |
 | External Models | EFMI scanning and bridge controls |
 
@@ -78,23 +78,33 @@ For the first test, use normally standing characters, select **None** for the En
 2. Open **Animation Import**.
 3. Check **Current path** for Blender's installation folder.
 4. If Blender was not found, select **Choose Blender Folder** and choose a folder containing `blender.exe`. Its parent Blender Foundation folder can also be used. Valid selections are saved.
-5. Select **Endministrator Pose (Experimental)**.
-6. Select **Import FBX**, choose the file and wait for conversion to finish. Keep the character and playback state unchanged during conversion.
+5. Select **Controlled Preset Pose**.
+6. Select **Import Partner FBX / VMD**, choose the file and wait for conversion to finish. Keep the character and playback state unchanged during conversion.
 7. Open **Module Settings → Calibration** and select the generated animation.
 
 Blender runs in the background. You do not need to operate it manually or send the FBX to the developer for conversion. Initial import still needs the target character's skeleton reference from the running game.
 
-### Endministrator Pose (Experimental)
+### Controlled Preset Pose
 
 | Option | Effect |
 | --- | --- |
-| None | Apply only the partner's FBX animation |
+| None | Do not add a controlled animation or procedural pose |
 | Standing | Preserve the Endministrator's initial standing bone rotations |
 | Front Waist Hug | Both hands approach the partner's waist from the front |
 | Back Waist Hug | Both hands approach the waist from behind |
 | Head Pat (Both Hands) | Both hands approach the partner's head |
 
-These are procedural tracking poses, not a two-character animation contained in the source FBX. Height, clothing, arm length and large partner movements affect contact. Calibration may be necessary. The chosen pose is stored with the imported animation; reimport to create a version with another pose.
+These are procedural tracking poses, not a two-character animation contained in the source FBX. Height, clothing, arm length and large partner movements affect contact. Calibration may be necessary. Select the pose directly and save it with your parameters. Selecting an imported controlled animation uses it without adding procedural hugs or head pats. Existing presets retain the pose stored with their older imported clips.
+
+### Import a Controlled Animation
+
+1. Control the male or female Endministrator you want to bind, connect to the game, select a party partner and stop playback.
+2. In Animation Import, select **Import Controlled FBX / VMD** and choose the file.
+3. On completion, the generated controlled animation is selected and activated automatically.
+4. Preview or edit the controlled timeline under **Module Settings → Calibration → Controlled Animation Calibration**. Choose the partner animation in its separate group.
+5. Use the shared **Prepare for Interaction Presets**, then apply the prepared setting to a numpad slot. The same preset stores both animation choices, the controlled pose, separate supports and bone parameters.
+
+Controlled animations bind to the male or female Endministrator used during import. After switching, select a matching animation or reimport. A mismatch displays the required character. Controlled and partner selection lists filter animations by their intended actor. Pair a controlled import with a partner import; without an imported partner clip, the partner selection changes to Standing.
 
 ### Full Animations and Character Binding
 
@@ -104,7 +114,21 @@ Generated names include the source and bound character, plus the additional pose
 
 Calibration preview tries to select the required partner from your party. If unavailable, it tells you which character is needed.
 
+### MMD Motion (VMD)
+
+1. Connect to the game, select the partner operator to bind and stop playback.
+2. Select **Import Partner FBX / VMD** and choose a `.vmd` directly. No PMX or MMD model selection is needed.
+3. After background conversion, use the same timeline, calibration and hotkey workflow.
+
+The built-in generic MMD skeleton and Japanese bone mapping retarget body, limbs, 30 finger joints, arm twists and leg/toe IK to the selected game character. Full-width/half-width IK and number variants are normalized automatically. Cameras, lights, facial morphs, model appearance and physics are ignored.
+
+The built-in proportions are a generic reference; unusual source proportions may still need calibration. Custom or unsupported accessory bones are listed in `conversion-report.json` and do not create new game bones. Camera-only VMDs and files without supported bone names are rejected with a message. Requires Blender 4.2 or newer; tested with Blender 5.2.
+
 ## 4. Preview and Calibration
+
+**Partner Animation Calibration** and **Controlled Animation Calibration** fold independently. Each contains its own selection, support, loop, play/stop and timeline controls. Shared preparation, parameter saving, status and help remain outside both groups.
+
+Both imported animations can play together. Pause, stepping and range marks affect only the selected actor. With two imported clips, stopping one restores its animation overrides while the other continues; stopping both restores shared placement and releases control. With one clip, stop restores the whole preview.
 
 Selecting an imported animation immediately shows its timeline, duration and selected range. When connected to the game, it creates a **paused preview of the first frame**. Without a connection, information remains visible; connect before playing or seeking.
 
@@ -244,3 +268,4 @@ The module log is `Interaction.Diagnostics.log` beside the DLL. FBX import direc
 
 Authors must check rights and attribution for animations, appearance assets and bundled resources before publication. Automated builds and tests do not establish compatibility with every game version or mod combination.
 
+Enable “Sync main/partner animations” in either calibration section to share playback, stop, pause, seeking/frame steps, and in/out markers. Both checkboxes share one state. Times use the same seconds and clamp to each clip’s duration; disable sync for independent controls. Play and stop keep the panel open; press Num0 or Esc to close it. Main FBX/VMD import is on the left and main pose presets on the right. Importing or selecting a main animation activates it directly.

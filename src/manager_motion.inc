@@ -41,6 +41,7 @@ bool BindManagerMotion(Pose& candidate){
  return true;
 }
 bool ApplyManagerMotion(float dt,float blend){
+ if(pose.mainStopped)return true;
  if(!pose.clip||pose.arms.empty())return true;
  if((pose.arms.size()!=3&&pose.arms.size()!=6)||!Living(pose.waist))return false;
  for(size_t armIndex=0;armIndex<pose.arms.size()/3;++armIndex){auto arms=pose.arms.data()+armIndex*3;

@@ -36,6 +36,13 @@ def main():
              'NLOHMANN-LICENSE.MIT': ROOT / 'third_party/nlohmann/LICENSE.MIT',
              'BETTER-ENDFIELD-LICENSE.txt': ROOT / 'third_party/better-endfield/LICENSE'}
     motions = ROOT / 'native/windows-x64/motions'
+    files['tools/retarget_vmd.py'] = ROOT / 'tools/retarget_vmd.py'
+    files['tools/standard_mmd.py'] = ROOT / 'tools/standard_mmd.py'
+    # These Python packages are worker runtime dependencies, not user models.
+    vendor = ROOT / 'tools/vendor'
+    for path in vendor.rglob('*'):
+        if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
+            files[path.relative_to(ROOT).as_posix()] = path
     for name in ('18.asf', '19.asf', '18_01.amc', '18_02.amc', '19_01.amc', '19_02.amc', 'README.md'):
         files['native/windows-x64/motions/' + name] = motions / name
     for name in ('arm_raise_diagnostic.interaction-animation.json', 'arm_rotation_test.interaction-animation.json'):

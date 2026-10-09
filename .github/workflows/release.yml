@@ -37,6 +37,10 @@ jobs:
         run: node tests/ui_feedback_tests.cjs
       - name: Language regression tests
         run: node tests/language_tests.cjs
+      - name: Built-in MMD skeleton tests
+        run: |
+          python tests/standard_mmd_tests.py
+          python tests/vmd_alias_tests.py
       - name: Package compiled runtime
         id: package
         run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --output-dir "${{ runner.temp }}/eai-package"

@@ -1,8 +1,8 @@
 // Optional skinning branches verified by name AND parent hierarchy. These
 // joints are not a reason to swap left and right animation tracks.
 bool BindArmTwists(Pose& candidate){
- if(!candidate.clip||!candidate.clip->absolute)return true;auto& pins=*candidate.pins;
- for(int actor=0;actor<2;++actor)for(const char* side:{"L","R"}){
+ if(!candidate.clip||!candidate.clip->absolute&&!candidate.controlledClip)return true;
+ for(int actor=0;actor<2;++actor)for(const char* side:{"L","R"}){if(actor==1&&!candidate.clip->absolute)continue;
   auto find=[&](const std::string& name)->void*{void* found=nullptr;for(auto& b:candidate.fullBones)if(b.info.actor==actor&&b.info.name==name){if(found)return nullptr;found=b.bone;}return found;};
   auto upper=find("Bip001_"+std::string(side)+"_UpperArm"),fore=find("Bip001_"+std::string(side)+"_Forearm");
   if(!upper||!fore)continue;PoseMath::Vector3 from{},to{};PoseMath::Quaternion upperWorld{},upperRest{};
@@ -11,7 +11,7 @@ bool BindArmTwists(Pose& candidate){
   void* previous=upper;
   for(int joint=0;joint<2;++joint){auto name="Bip001_"+std::string(side)+"UpArmTwist"+(joint?"1":"");auto bone=find(name);
    if(!bone||Call(Parent,bone)!=previous)break;previous=bone;
-   if(std::any_of(candidate.clip->tracks.begin(),candidate.clip->tracks.end(),[&](auto& track){return track.actor==actor&&track.bone==name;}))continue;
+   if(std::any_of((actor==0&&candidate.controlledClip?candidate.controlledClip:candidate.clip)->tracks.begin(),(actor==0&&candidate.controlledClip?candidate.controlledClip:candidate.clip)->tracks.end(),[&](auto& track){return track.actor==actor&&track.bone==name;}))continue;
    PoseMath::Quaternion world{},local{};if(!Value(WorldRotation,bone,world)||!Rotation(bone,local))continue;
    FingerControl control;control.bone=bone;control.root=actor?candidate.reverse.root:candidate.root;control.rest=control.base=local;
    Pose::Twist driver;driver.upper=upper;driver.finger=candidate.fingers.size();driver.axis=axis;driver.upperRest=upperRest;driver.offset=PoseMath::Multiply(PoseMath::Inverse(upperWorld),world);driver.weight=1.f;
@@ -23,7 +23,7 @@ bool BindArmTwists(Pose& candidate){
  return true;
 }
 bool ApplyArmTwists(){
- for(auto& driver:pose.twists){auto& control=pose.fingers[driver.finger];PoseMath::Quaternion upperLocal{},upperWorld{},current{},parentWorld{};auto parent=Call(Parent,control.bone);
+ for(auto& driver:pose.twists){auto& control=pose.fingers[driver.finger];if(control.root==pose.root&&pose.mainStopped||control.root==pose.reverse.root&&pose.partnerStopped)continue;PoseMath::Quaternion upperLocal{},upperWorld{},current{},parentWorld{};auto parent=Call(Parent,control.bone);
   if(!Living(control.bone)||!Living(driver.upper)||!leases->owns(control.root,id,control.lease)||!parent||!Rotation(driver.upper,upperLocal)||!Value(WorldRotation,driver.upper,upperWorld)||!Rotation(control.bone,current)||!Value(WorldRotation,parent,parentWorld))return false;
   auto delta=PoseMath::Multiply(PoseMath::Inverse(driver.upperRest),upperLocal),counter=Handshake::TwistFraction(delta,driver.axis,driver.weight-1.f);
   auto desiredWorld=PoseMath::Multiply(PoseMath::Multiply(upperWorld,counter),driver.offset);

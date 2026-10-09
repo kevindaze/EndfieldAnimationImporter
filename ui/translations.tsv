@@ -365,3 +365,38 @@ JSON 已保存：	JSON Saved:
 模型骨架	Model Bones
 已連接 Unity 骨架；在模型骨架調整 XYZ	Unity bones connected. Adjust XYZ under Model Bones.
 找不到唯一骨架；請確認模組已載入	No unique bone found. Confirm that the mod is loaded.
+導入 FBX / VMD	Import FBX / VMD
+動畫已排隊，下一次 Gameplay 更新取得 bind pose 後轉換	Animation queued; conversion starts after the next Gameplay bind-pose capture
+動畫正在背景重定向，請等待；不會凍結遊戲	Retargeting animation in the background; please wait
+動畫已重定向並匯入	Animation retargeted and imported:
+請先停止播放再匯入 FBX / VMD	Stop playback before importing FBX / VMD
+另一個動畫正在轉換	Another animation is being converted
+動畫轉換超過五分鐘，已取消	Animation conversion exceeded five minutes and was cancelled
+FBX / VMD 需本機 Blender；VMD 使用內建骨架，只匯入動作。	FBX / VMD requires local Blender; VMD uses the built-in skeleton. Motion only.
+主控預設姿勢	Controlled Preset Pose
+自行導入	Custom Import
+配角動畫校準	Partner Animation Calibration
+主控動畫校準	Controlled Animation Calibration
+導入主控 FBX / VMD	Import Controlled FBX / VMD
+導入配角 FBX / VMD	Import Partner FBX / VMD
+導入配角 JSON	Import Partner JSON
+主控動畫時間：	Controlled Animation Time:
+尚未選擇動畫	No Animation Selected
+主控動畫不存在	Controlled animation is missing
+支撐各自作用於主控或配角；跳躍請選不固定。	Each support applies to its own actor. Choose Free for jumps.
+支撐模式已更新（主控）；需重新準備匯出	Controlled support updated; prepare settings again.
+支撐模式已更新（配角）；需重新準備匯出	Partner support updated; prepare settings again.
+動畫缺失或主控不符，請重新選擇對應動畫	Animation missing or controlled character mismatch; choose a matching animation.
+主控動畫片段	Controlled Animation Clip
+主控動畫缺失	Controlled Animation Missing
+作用於主控。	Applies to the controlled character.
+動畫已選取，暫停預覽已排隊	Animation selected; paused preview queued.
+動畫資訊已展開；請先連接遊戲入口	Animation details are visible; connect to the game first.
+動畫已選擇，需重新準備匯出	Animation selected; prepare settings again.
+主控动画	Controlled Animation
+主控動畫	Controlled Animation
+主控動畫缺失，請先導入或選擇有效的主控動畫	Controlled animation missing; import or select a valid controlled clip.
+
+同步主控/配角動畫	Sync main/partner animations
+☑ 同步主控/配角動畫	☑ Sync main/partner animations
+☐ 同步主控/配角動畫	☐ Sync main/partner animations

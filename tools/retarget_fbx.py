@@ -37,13 +37,13 @@ def rigid(m):
     return result
 
 
-def target_reference(data):
+def target_reference(data, actor=1):
     if data.get('format') != 'endfield-skeleton-pose-reference' or data.get('version') != 1:
         raise ValueError('Unsupported skeleton reference')
-    palettes = [p for p in data.get('mesh_bindposes', []) if p['actor'] == 1]
+    palettes = [p for p in data.get('mesh_bindposes', []) if p['actor'] == actor]
     if not palettes:
         raise ValueError('No partner mesh bindposes; connect and refresh skeleton with the new module')
-    nodes = {b['key']: b for b in data['bones'] if b['actor'] == 1}
+    nodes = {b['key']: b for b in data['bones'] if b['actor'] == actor}
     # Facial/accessory joints are not part of this body retargeter. Validate
     # only body joints and their ancestors, not unrelated scaled eyelashes.
     needed = {key for key, node in nodes.items() if node['name'].startswith('Bip001')}
@@ -144,7 +144,7 @@ def body_basis(transforms):
     return Matrix((right, up, forward)).transposed()
 
 
-def retarget_frame(source_bind, source_pose, target_bind, parents, mapping, source_basis, target_basis, height_scale, align_directions=True):
+def retarget_frame(source_bind, source_pose, target_bind, parents, mapping, source_basis, target_basis, height_scale, align_directions=True, initial_source_position=None):
     # Blender is right handed, Unity is left handed. Apply the reflection to
     # ROTATION MATRICES, not by guessing quaternion sign flips per bone.
     reflection = Matrix.Diagonal((1., 1., -1.))
@@ -180,7 +180,10 @@ def retarget_frame(source_bind, source_pose, target_bind, parents, mapping, sour
             correction=observed.normalized().rotation_difference(source_direction.normalized())
             rotations[key]=correction.to_matrix() @ rotations[key]
     pelvis = next(k for k in mapping if mapping[k] == 'Bip001_Pelvis')
-    displacement = conversion @ (source_pose['Bip001_Pelvis'].translation-source_bind['Bip001_Pelvis'].translation) * height_scale
+    # Anchor motion to the first evaluated pose, rather than the source rig's
+    # authored scene location. Keep subsequent XYZ motion, including crouches.
+    origin = initial_source_position if initial_source_position is not None else source_bind['Bip001_Pelvis'].translation
+    displacement = conversion @ (source_pose['Bip001_Pelvis'].translation-origin) * height_scale
     posed = {}
     locals = {}
     visiting = set()
@@ -239,18 +242,23 @@ def simplify(samples, positional):
     return [samples[i] for i in sorted(keep)]
 
 
-def run(args):
+def run(args, loader=None, mapper=None, kind='fbx'):
     reference_bytes = args.reference.read_bytes()
     reference = json.loads(reference_bytes)
-    nodes, names, target_bind, weighted = target_reference(reference)
-    bpy.ops.import_scene.fbx(filepath=str(args.input.resolve()))
+    actor = getattr(args, 'actor', 'partner')
+    character = reference['controlled' if actor == 'controlled' else 'partner']
+    nodes, names, target_bind, weighted = target_reference(reference, 0 if actor == 'controlled' else 1)
+    if loader:
+        loader(args)
+    else:
+        bpy.ops.import_scene.fbx(filepath=str(args.input.resolve()))
     rigs = [o for o in bpy.data.objects if o.type=='ARMATURE' and o.animation_data and o.animation_data.action]
     if len(rigs) != 1:
         raise ValueError('Expected one animated humanoid armature')
     rig = rigs[0]
-    if any(b.constraints for b in rig.pose.bones):
+    if not loader and any(b.constraints for b in rig.pose.bones):
         raise ValueError('Bake source constraints before importing')
-    source_names = source_mapping(rig)
+    source_names = (mapper or source_mapping)(rig)
     # Optional joints require authoritative target bind poses too.
     source_names = {target:source for target,source in source_names.items()
                     if target in names and names[target] in weighted}
@@ -279,9 +287,9 @@ def run(args):
             parent = parents.get(parent)
     if len(selected)>64:
         raise ValueError('Mapped hierarchy exceeds 64 tracks')
-    # Remove meshes for fast pose evaluation; supported rigs have no constraints.
+    # FBX needs only the armature. MMD keeps helpers for IK animation drivers.
     for obj in list(bpy.data.objects):
-        if obj!=rig:
+        if obj!=rig and not loader:
             bpy.data.objects.remove(obj,do_unlink=True)
     boundaries=[0.]
     while boundaries[-1]+30<duration:
@@ -289,14 +297,18 @@ def run(args):
     if duration-boundaries[-1]<.2 and len(boundaries)>1:
         boundaries.pop()
     boundaries.append(duration)
-    times=sorted(set([min(i/10,duration) for i in range(math.ceil(duration*10)+1)]+boundaries+[min(10.,duration)]))
+    sample_fps = 30 if kind == 'vmd' else 10
+    times=sorted(set([min(i/sample_fps,duration) for i in range(math.ceil(duration*sample_fps)+1)]+boundaries+[min(10.,duration)]))
     samples={key:[] for key in sorted(selected)}
     pelvis_key=None
+    initial_source_position=None
     for i,t in enumerate(times):
         f=first+t*source_fps
         scene.frame_set(math.floor(f),subframe=f-math.floor(f))
         source_pose={target:rig.matrix_world @ rig.pose.bones[source].matrix for target,source in source_names.items()}
-        local,pelvis_key=retarget_frame(source_bind,source_pose,target_bind,parents,mapping,source_basis,target_basis,height_scale)
+        if initial_source_position is None:
+            initial_source_position=source_pose['Bip001_Pelvis'].translation.copy()
+        local,pelvis_key=retarget_frame(source_bind,source_pose,target_bind,parents,mapping,source_basis,target_basis,height_scale,initial_source_position=initial_source_position)
         for key in samples:
             q=local[key].to_quaternion().normalized()
             if samples[key] and samples[key][-1][1].dot(q)<0:
@@ -306,7 +318,8 @@ def run(args):
             print('Retarget',i,'/',len(times),flush=True)
     source_hash=hashlib.sha256(args.input.read_bytes()).hexdigest()
     ref_hash=hashlib.sha256(reference_bytes).hexdigest()
-    prefix='fbx_'+source_hash[:10]+'_'+reference['partner']
+    model_hash = hashlib.sha256(args.model.read_bytes()).hexdigest()[:10]+'_' if kind == 'vmd' else ''
+    prefix=kind+'_'+source_hash[:10]+'_'+model_hash+character+('_main' if actor == 'controlled' else '')
     files=[]
     def export(start,end,suffix,label):
         clip_id=prefix+'_'+suffix
@@ -323,9 +336,9 @@ def run(args):
                 keys.append(k)
             tracks.append({'bone':nodes[key]['name'],'keys':keys})
         data={'format':'endfield-interaction-animation','version':2,'rotation_space':'absolute_local',
-              'target_character':reference['partner'],'id':clip_id,'name':label,
+              'target_character':character,'id':clip_id,'name':label,
               'duration':round(end-start,6),'distance':1.2,
-              'actors':[{'role':'partner','tracks':tracks}]}
+              'actors':[{'role':actor,'tracks':tracks}]}
         file=args.output/(clip_id+'.interaction-animation.json')
         file.write_text(json.dumps(data,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
         files.append(file.name)
@@ -333,12 +346,15 @@ def run(args):
     export(0,duration,'full',title+' 完整動畫')
     report={'source':str(args.input.resolve()),'source_sha256':source_hash,
             'reference':str(args.reference.resolve()),'reference_sha256':ref_hash,
-            'target_character':reference['partner'],'source_mapping':source_names,
+            'target_character':character,'target_role':actor,'source_mapping':source_names,
             'duration':duration,'height_scale':height_scale,'tracks':len(samples),
             'algorithm':'mesh bind poses, body-frame handedness conversion, anatomical segment alignment, target-parent local reconstruction',
-            'root_motion':'pelvis local translation; model anchors remain fixed',
+            'root_motion':'pelvis translation relative to first evaluated source pose; model anchors remain fixed',
+            'source_initial_pelvis_position':list(initial_source_position),
             'not_transferred':['facial shapes','hair','cloth','props'],
-            'verified_in_game':False}
+            'verified_in_game':False, 'source_format':kind, 'sample_fps':sample_fps}
+    if kind == 'vmd':
+        report.update(args.motion_report)
     (args.output/'conversion-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     return files
 
@@ -348,6 +364,7 @@ def main():
     p.add_argument('input',type=Path)
     p.add_argument('output',type=Path)
     p.add_argument('--reference',type=Path,required=True)
+    p.add_argument('--actor',choices=['partner','controlled'],default='partner')
     args=p.parse_args(sys.argv[sys.argv.index('--')+1:])
     args.output.mkdir(parents=True,exist_ok=True)
     try:

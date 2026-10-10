@@ -430,3 +430,8 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 
 主控動畫列表	Main Animation List
 互動動畫列表	Partner Animation List
+（與初始綁定角色不同，可能導致動骨錯誤綁定。若有異常，選定想要的角色重新匯入動畫即可解決）	(This character differs from the original binding. Bones may be bound incorrectly. If problems occur, select the desired character and reimport the animation.)
+（與初始校準角色不同，因身高不同，一定會導致位置偏移，適合懶人）	(Using a different character from the original calibration will cause position offsets due to height differences. A convenient shortcut.)
+啟用角色動畫互用	Enable Cross-Character Animation Reuse
+讀取參數設定JSON	Load Parameter Settings JSON
+請勾選啟用角色動畫互用，或選擇此設定的校準角色	Enable Cross-Character Animation Reuse, or select the character used to calibrate this preset

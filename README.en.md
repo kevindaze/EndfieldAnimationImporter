@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) | English
 
-Version: **1.3.5-Alpha** · Windows x64 · October 9, 2026
+Version: **1.4.0-Alpha** · Windows x64 · October 10, 2026
 
 The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
 
@@ -61,7 +61,7 @@ Use the language menu at the **far left** of the panel to select **繁體中文*
 | Num0 | Open or close the in-game panel |
 | Esc | Return to the game while editing the panel |
 | Mouse wheel | Scroll; use section arrows to collapse or expand content |
-| Numpad 1–9 | Activate configured presets; enable hotkeys and Num Lock |
+| Numpad 1–9 | Activate configured presets; turn on Num Lock |
 | Animation Import | Blender path, Endministrator pose, FBX / VMD / animation JSON import and library |
 | Module Settings | Characters, calibration, timeline, bones and presets |
 | Free Camera | Camera toggle, shortcut and reset position |
@@ -70,6 +70,8 @@ Use the language menu at the **far left** of the panel to select **繁體中文*
 For hotkey playback, **press the same key to stop**. Pressing another configured key stops the current animation and switches to that preset. Empty or disabled slots do nothing. If a character requirement is not met, follow the prompt to change the controlled Endministrator or partner.
 
 BEM's module web page also provides controls. Its FBX picker, Blender folder picker and clip Save As controls open native dialogs. If a dialog is unavailable, open the Num0 panel in-game first.
+
+Calibration can preview partner animations imported for another character. A red warning below the animation selector indicates a different original binding. If bones look incorrect, select the desired character and reimport. **Enable Cross-Character Animation Reuse** in Interaction Presets is off by default; enable it to use another character’s calibrated preset on the currently selected partner. Height differences cause position offsets. Main-character binding remains enforced.
 
 ## 3. Import an FBX
 
@@ -210,10 +212,10 @@ Animation saving controls appear after entering preview; paused preview also qua
 2. Select **Prepare for [Interaction Presets]**.
 3. Choose a Numpad 1–9 slot under **Interaction Presets**.
 4. Apply the prepared settings, or load settings JSON into that slot.
-5. Save settings and enable hotkeys.
+5. Save settings. Numpad shortcuts are always enabled; turn on Num Lock.
 6. Return to gameplay and press the assigned numpad key.
 
-Presets record the male/female Endministrator and partner requirements. Slots display animation names. Deleting a referenced animation leaves the slot but marks the animation missing. Importing an animation with the same ID can update that library item.
+Presets record the Endministrator and calibrated partner. Without cross-character reuse, select that partner; enable reuse to apply the preset to the currently selected partner. Slots display animation names. Deleting a referenced animation leaves the slot but marks the animation missing. Importing an animation with the same ID can update that library item.
 
 ## Free Camera
 

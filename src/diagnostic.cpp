@@ -4,7 +4,7 @@
 #include "external_mesh.h"
 
 #include <BetterEndfield/ThirdPartyModule.h>
-#include <BetterEndfield/PoseLease.h>
+#include "pose_ownership.h"
 #include "pose_math.h"
 #include "handshake_motion.h"
 #include "grip_settings.h"
@@ -71,7 +71,7 @@ bool movementContracts=false;
 std::atomic_bool movementPending{false};
 std::atomic_bool followPending{false};
 DWORD unityThread=0;
-const BE_PoseLeaseApiV1* leases=nullptr;
+const EaiPose::Api* leases=EaiPose::GetApi();
 using Tick=void(__fastcall*)(void*,float,void*);
 Tick next=nullptr;
 uint64_t hook=0;
@@ -817,28 +817,28 @@ void __fastcall Detour(void* instance,float dt,void* method){
  if(pending.exchange(false)){StopPose("diagnostic scan",true);Scan();Event("scan_complete");}
 }
 std::string ConnectionFailure(BE_Result result,const std::string& stage){
- if(result==BE_Result_Conflict&&stage=="CameraManager.TailLateTick")return "連接入口被獨占（可能是 BEM 相機模組）；停用相機模組並重啟遊戲後再連接";
+ if(result==BE_Result_Conflict&&stage=="CameraManager.TailLateTick")return "連接入口被獨占；停用其他相機模組並重啟遊戲後再連接";
  if(result==BE_Result_NotReady)return "遊戲入口尚未就緒（"+stage+"），進入遊戲後重試";
- if(result==BE_Result_NotFound||result==BE_Result_ContractMismatch)return "遊戲入口不相容或缺少方法（"+stage+"），請核對 BEM 與遊戲版本";
- return "連接失敗（"+stage+"，錯誤 "+std::to_string(int(result))+"），請查看 BEM 模組日誌";
+ if(result==BE_Result_NotFound||result==BE_Result_ContractMismatch)return "遊戲入口不相容或缺少方法（"+stage+"），請核對 EML 與遊戲版本";
+ return "連接失敗（"+stage+"，錯誤 "+std::to_string(int(result))+"），請查看 EML 模組日誌";
 }
 BE_Result Connect(){
  if(hook)return BE_Result_Ok;
  auto failure=[](BE_Result result,const std::string& stage){panelStatus=ConnectionFailure(result,stage);Log("Connect failed: "+stage+" result="+std::to_string(int(result)));return result;};
  runtime=host->get_runtime?host->get_runtime(host->context):host->runtime;
  if(!runtime)return failure(BE_Result_NotReady,"runtime");
- if(runtime->abi_version!=1||!runtime->resolve_method||!runtime->resolve_class||!runtime->runtime_invoke||!runtime->object_unbox||!runtime->copy_managed_string||!runtime->gchandle_new||!runtime->gchandle_free||!runtime->field_get_value_object)return failure(BE_Result_ContractMismatch,"runtime ABI");
+ if(runtime->abi_version!=1||!runtime->resolve_field||!runtime->resolve_method||!runtime->resolve_class||!runtime->runtime_invoke||!runtime->object_unbox||!runtime->copy_managed_string||!runtime->gchandle_new||!runtime->gchandle_free||!runtime->field_get_value_object)return failure(BE_Result_ContractMismatch,"runtime ABI");
+ animator={};skinnedRenderer={};uiCanvas={};squad={};poseContracts=lookContracts=standingContracts=movementContracts=false;
  for(int i=0;i<sizeof(methods)/sizeof(methods[0]);++i){
-  auto result=runtime->resolve_method(runtime->context,&methods[i].spec,&methods[i].resolved);
-  if(result!=BE_Result_Ok){Log(std::string("Missing contract: ")+methods[i].spec.class_name+"."+methods[i].spec.method_name);if(i<Player)return failure(result,std::string(methods[i].spec.class_name)+"."+methods[i].spec.method_name);}
+  methods[i].resolved={};auto result=runtime->resolve_method(runtime->context,&methods[i].spec,&methods[i].resolved);
+  if(result==BE_Result_Ok&&(!methods[i].resolved.method_info||(i==Tail&&!methods[i].resolved.method_pointer)))result=BE_Result_ContractMismatch;
+  if(result!=BE_Result_Ok){methods[i].resolved={};Log(std::string("Missing contract: ")+methods[i].spec.class_name+"."+methods[i].spec.method_name);if(i<=Loading||(i>=Alive&&i<=SetLocalPosition))return failure(result,std::string(methods[i].spec.class_name)+"."+methods[i].spec.method_name);}
  }
  poseContracts=true;for(int i=Alive;i<=SetLocalRotation;++i)poseContracts=poseContracts&&methods[i].resolved.method_info;
- auto getLease=reinterpret_cast<BE_GetPoseLeaseApiV1Fn>(GetProcAddress(GetModuleHandleW(L"BetterEndfield.Host.dll"),"BetterEndfield_GetPoseLeaseApiV1"));
- leases=getLease?getLease():nullptr;
- if(leases&&(leases->version!=1||!leases->acquire||!leases->owns||!leases->release))leases=nullptr;
+ leases=EaiPose::GetApi();Log("EAI internal pose ownership ready; no external Host pose service required");
  if(runtime->resolve_class(runtime->context,"UnityEngine.AnimationModule.dll","UnityEngine","Animator",&animator)!=BE_Result_Ok||!animator.type_object)return failure(BE_Result_NotFound,"UnityEngine.Animator");
  runtime->resolve_class(runtime->context,core,"UnityEngine","SkinnedMeshRenderer",&skinnedRenderer);runtime->resolve_class(runtime->context,"UnityEngine.UIModule.dll","UnityEngine","Canvas",&uiCanvas);
- if(runtime->resolve_field){BE_FieldDescriptorV1 field{game,"Beyond.Gameplay","GamePlayer","squadManager","Beyond.Gameplay.Core.SquadManager"};runtime->resolve_field(runtime->context,&field,&squad);}
+ {BE_FieldDescriptorV1 field{game,"Beyond.Gameplay","GamePlayer","squadManager","Beyond.Gameplay.Core.SquadManager"};auto fieldResult=runtime->resolve_field(runtime->context,&field,&squad);if(fieldResult!=BE_Result_Ok||!squad.field_info)return failure(fieldResult==BE_Result_Ok?BE_Result_ContractMismatch:fieldResult,"GamePlayer.squadManager");}
  lookContracts=squad.field_info&&methods[Position].resolved.method_info&&methods[WorldRotation].resolved.method_info;
  for(int i=Player;i<=Loading;++i)lookContracts=lookContracts&&methods[i].resolved.method_info;
  standingContracts=lookContracts;for(int i=SetPosition;i<=SetLocalPosition;++i)standingContracts=standingContracts&&methods[i].resolved.method_info;
@@ -846,13 +846,14 @@ BE_Result Connect(){
  auto hooks=host->hooks;
  if(!hooks||hooks->version!=1||hooks->struct_size<sizeof(*hooks)||!hooks->create||!hooks->disable)return failure(BE_Result_NotReady,"hook chain API");
  auto result=hooks->create(hooks->context,id,methods[Tail].resolved.method_pointer,reinterpret_cast<void*>(&Detour),reinterpret_cast<void**>(&next),&hook);
- if(result!=BE_Result_Ok){hook=0;next=nullptr;return failure(result,"CameraManager.TailLateTick");}
+ if(result!=BE_Result_Ok||!hook||!next){if(hook)hooks->disable(hooks->context,hook);hook=0;next=nullptr;return failure(result==BE_Result_Ok?BE_Result_ContractMismatch:result,"CameraManager.TailLateTick");}
+ Log(std::string("EML game entry contracts: pose=")+(poseContracts?"ready":"missing")+", squad="+(lookContracts?"ready":"missing")+", placement="+(standingContracts?"ready":"missing")+", movement="+(movementContracts?"ready":"missing"));
  FreeCameraInput::toggleRequests=0;if(!FreeCameraInput::Install(host->hooks,id)||!InstallCameraInput()||!InstallCameraOutput())freeCamera.status="自由相機輸入攔截未接通，未啟用";Log("Diagnostic TailLateTick chain connected; scans are explicitly queued by UI");return BE_Result_Ok;
 }
 void ReadSavedGrip(const char* configuration){if(!configuration)return;try{auto config=Presets::Json::parse(configuration);if(!config.contains("grip_values"))return;Grip::Settings candidate=gripTarget;if(!candidate.Read(Presets::Json{{"grip_values",config.at("grip_values")}}.dump()))return;if(config.value("grip_schema",0)==1)for(int i=0;i<21;++i)std::swap(candidate.values[i],candidate.values[i+21]);gripTarget=candidate;}catch(...){}}
 BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* configuration){
  if(!provided||provided->version!=1||provided->struct_size<sizeof(*provided)||!provided->log||!provided->reply)return BE_Result_ContractMismatch;
- std::lock_guard lock(gate);host=provided;targetChoices.clear();selectedSlot=-1;selectedModel.clear();selectedIdentity.clear();boneTarget=Bones::Settings{};presetBank=Presets::Bank{};presetKeys.fill(true);activePreset=-1;pendingPreset=-1;pendingStart=-1;targetsPending=false;active=true;pending=false;restoreRequested=false;armed=false;keyDown=false;unityThread=0;
+ std::lock_guard lock(gate);EaiPose::ownership.Clear();leases=EaiPose::GetApi();host=provided;targetChoices.clear();selectedSlot=-1;selectedModel.clear();selectedIdentity.clear();boneTarget=Bones::Settings{};presetBank=Presets::Bank{};presetKeys.fill(true);activePreset=-1;pendingPreset=-1;pendingStart=-1;targetsPending=false;active=true;pending=false;restoreRequested=false;armed=false;keyDown=false;unityThread=0;
  wchar_t path[32768]{};HMODULE module=nullptr;
  if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&Initialize),&module)&&GetModuleFileNameW(module,path,32768)){
   // Log beside the local DLL; inability to write is reported, never redirected to game files.
@@ -865,7 +866,7 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 1.4.0-Alpha initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 1.5.0-Alpha initialized; follow research is read-only; verified preview modes retained");
  FreeCameraInput::Start();
  if(!InteractionPanel::Start(PanelRead,PanelExecute))Log("Interaction overlay unavailable; use module web UI");
  if(!output)Log("Persistent log unavailable; Host retains only its recent diagnostic messages");
@@ -1000,7 +1001,7 @@ bool SavePanelSettings(){
 }
 void LoadPanelSettings(){
 #ifndef INTERACTION_NO_OVERLAY
- try{auto file=PanelSettingsPath();if(file.empty()||!std::filesystem::exists(file)||std::filesystem::file_size(file)>33554432)return;std::ifstream in(file,std::ios::binary);auto data=Presets::Json::parse(in);partnerAnimationReuse=data.value("partner_animation_reuse",false);freeCamera.hideUi=data.value("free_camera_hide_ui",false);int cameraKey=data.value("free_camera_hotkey",VK_F9);if(FreeCamera::ValidHotkey(cameraKey))FreeCameraInput::hotkey=cameraKey;if(data.contains("animation_import_folders")){const auto& folders=data["animation_import_folders"];if(folders.is_array()&&folders.size()==2&&folders[0].is_string()&&folders[1].is_string())animationImportFolders=folders.get<std::array<std::string,2>>();}if(data.value("base_configuration",std::string{})!=panelBaseline){Log("BEM configuration changed offline; retain new BEM configuration");return;}auto bank=presetBank;if(!bank.Read(data.at("preset_bank")))return;Grip::Settings settings;if(!settings.Read(Presets::Json{{"grip_values",data.at("grip_values")}}.dump()))return;blenderFolder=data.value("blender_folder",blenderFolder);externalFolder=data.value("external_folder",externalFolder);if(data.contains("skeleton_references"))ReadSkeletonReferences(data["skeleton_references"]);calibrationLoop=data.value("calibration_loop",false);controlledLoop=data.value("controlled_loop",false);syncAnimations=data.value("sync_animations",false);controlledSupport=data.value("controlled_support",std::string("none"));controlledPose=data.value("controlled_pose",std::string("inherit"));selectedControlledClip=data.value("controlled_animation",std::string("none"));auto savedSupport=Support::Normalize(data.value("support_mode",std::string("none")));if(Support::Valid(savedSupport))supportTarget=savedSupport;currentUiSettings=data.value("ui_schema",0)>=16;presetBank=bank;gripTarget=settings;if(data.contains("bone_offsets"))boneTarget.Read(data["bone_offsets"]);Log("Overlay settings restored from local application data");}catch(...){Log("Overlay settings invalid; retain BEM configuration");}
+ try{auto file=PanelSettingsPath();if(file.empty()||!std::filesystem::exists(file)||std::filesystem::file_size(file)>33554432)return;std::ifstream in(file,std::ios::binary);auto data=Presets::Json::parse(in);partnerAnimationReuse=data.value("partner_animation_reuse",false);freeCamera.hideUi=data.value("free_camera_hide_ui",false);int cameraKey=data.value("free_camera_hotkey",VK_F9);if(FreeCamera::ValidHotkey(cameraKey))FreeCameraInput::hotkey=cameraKey;if(data.contains("animation_import_folders")){const auto& folders=data["animation_import_folders"];if(folders.is_array()&&folders.size()==2&&folders[0].is_string()&&folders[1].is_string())animationImportFolders=folders.get<std::array<std::string,2>>();}if(data.value("base_configuration",std::string{})!=panelBaseline){Log("Loader configuration changed offline; retain new loader configuration");return;}auto bank=presetBank;if(!bank.Read(data.at("preset_bank")))return;Grip::Settings settings;if(!settings.Read(Presets::Json{{"grip_values",data.at("grip_values")}}.dump()))return;blenderFolder=data.value("blender_folder",blenderFolder);externalFolder=data.value("external_folder",externalFolder);if(data.contains("skeleton_references"))ReadSkeletonReferences(data["skeleton_references"]);calibrationLoop=data.value("calibration_loop",false);controlledLoop=data.value("controlled_loop",false);syncAnimations=data.value("sync_animations",false);controlledSupport=data.value("controlled_support",std::string("none"));controlledPose=data.value("controlled_pose",std::string("inherit"));selectedControlledClip=data.value("controlled_animation",std::string("none"));auto savedSupport=Support::Normalize(data.value("support_mode",std::string("none")));if(Support::Valid(savedSupport))supportTarget=savedSupport;currentUiSettings=data.value("ui_schema",0)>=16;presetBank=bank;gripTarget=settings;if(data.contains("bone_offsets"))boneTarget.Read(data["bone_offsets"]);Log("Overlay settings restored from local application data");}catch(...){Log("Overlay settings invalid; retain loader configuration");}
 #endif
 }
 bool AnimationBindingMismatch(const std::string& clipId,const std::string& character){auto it=animationLibrary.find(clipId.starts_with("clip:")?clipId.substr(5):std::string{});return it!=animationLibrary.end()&&!it->second->targetCharacter.empty()&&!character.empty()&&it->second->targetCharacter!=character;}
@@ -1073,7 +1074,7 @@ void BE_CALL Shutdown(){
  if(host&&host->hooks&&cameraPushHook)host->hooks->disable(host->hooks->context,cameraPushHook);cameraPushHook=0;cameraPushReady=false;
  if(host&&hook&&host->hooks)host->hooks->disable(host->hooks->context,hook);
  FreeCameraInput::Stop();
- std::lock_guard lock(gate);hook=0;host=nullptr;runtime=nullptr;output.close();
+ std::lock_guard lock(gate);hook=0;EaiPose::ownership.Clear();host=nullptr;runtime=nullptr;output.close();
 }
 const BE_ThirdPartyModuleV1 api{sizeof(BE_ThirdPartyModuleV1),1,id,Initialize,Configure,Message,Shutdown};
 }

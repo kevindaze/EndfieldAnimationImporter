@@ -91,5 +91,5 @@ jobs:
           if [[ "$PRERELEASE" == "true" ]]; then options+=(--prerelease); fi
           gh release create "$tag" "package/$FILENAME" \
             --target "$COMMIT" --title "EndfieldAnimationImporter $VERSION" \
-            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Requires BEM; FBX conversion requires Blender." \
+            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Requires EML; FBX conversion requires Blender." \
             "${options[@]}"

@@ -1,14 +1,16 @@
 # EndfieldAnimationImporter User Guide
 
+> **Loader compatibility:** Version 1.4.0 and earlier use [BEM (Better Endfield)](https://github.com/Dr-hydra/Better-Endfield); version 1.5.0 onward uses [EML (Endfield Mod Loader)](https://github.com/Dr-hydra/Endfield-Mod-Loader).
+
 [繁體中文](README.md) | English
 
-Version: **1.4.0-Alpha** · Windows x64 · October 10, 2026
+Version: **1.5.0-Alpha** · Windows x64 · October 10, 2026
 
-The module appears in BEM as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
+The module appears in EML as **EndfieldAnimationImporter**. Its in-game panel is **EAI Panel (Num0)**. This is an Alpha release; read the compatibility notes before use.
 
 ## Introduction
 
-EAI is a third-party module loaded through [Better Endfield (BEM)](https://github.com/Dr-hydra/Better-Endfield). Install BEM before downloading and using this module.
+EAI is a third-party module loaded through [Endfield Mod Loader (EML)](https://github.com/Dr-hydra/Endfield-Mod-Loader). Install EML before downloading and using this module.
 
 EAI retargets humanoid FBX / VMD animations separately to the controlled Endministrator and a partner in your party. It provides in-game preview, character placement, bone adjustment, timeline seeking, animation clipping and numpad interaction presets. It recognizes the currently controlled male or female Endministrator and records that choice in presets.
 
@@ -18,27 +20,27 @@ Single-character FBX animations can optionally use experimental procedural Endmi
 
 | Requirement | Details |
 | --- | --- |
-| Runtime | Windows x64, the game, and a BEM version capable of loading this module |
+| Runtime | Windows x64, the game, and an EML version capable of loading this module |
 | FBX / VMD conversion | Install Blender locally; Blender is not included |
 | Animation JSON | Use EAI animation JSON. Playback does not require running Blender again |
 | Controlled character | Male or female Endministrator |
 | Partner | Must be in the party, with its model instantiated by the game |
 | External models | Install EFMI and the desired appearance mods separately |
 
-**Disable BEM's camera module and restart the game.** Turning off first-person view alone can leave the camera hook occupied and prevent connection. Simultaneous use with that camera module is not supported.
+**Disable other first-person / camera modules and restart the game.** Avoid running another camera controller while using EAI Free Camera.
 
-BEM and EFMI can run together. For external-model features, select **XInput auto-start** in BEM. EAI does not include EFMI, third-party appearance mods or your animation files.
+EML loads EAI. Start EFMI separately according to its installation instructions. EAI does not include EFMI, third-party appearance mods or your animation files.
 
 ### Install or Update
 
-1. Close the game. Import the module ZIP through BEM and enable it.
-2. Disable BEM's camera module and restart the game.
+1. Close the game. Import the module ZIP through EML and enable it.
+2. Disable other first-person / camera modules, then use EML’s **Launch Game**.
 3. Control an Endministrator and enter normal gameplay.
 4. Press **Num0** to open the panel.
 5. Under **Module Settings → Partner**, select **Connect to Game**.
 6. Refresh the party and select the partner.
 
-Back up the data directory listed below before updating if needed. EAI and BEM have separate version numbers; compatibility with every game or BEM version is not guaranteed.
+Back up the data directory listed below before updating if needed. EAI and EML have separate version numbers; compatibility with every game or EML version is not guaranteed.
 
 ## Quick Start
 
@@ -54,7 +56,7 @@ flowchart TD
 
 ## 2. Panel, Language and Hotkeys
 
-Use the language menu at the **far left** of the panel to select **繁體中文** or **English**. Labels update immediately. The native panel and BEM web page remember their language choices independently. Language changes do not modify saved animation IDs, bone names or preset parameters.
+Use the language menu at the **far left** of the panel to select **繁體中文** or **English**. Labels update immediately. The native panel and EML web page remember their language choices independently. Language changes do not modify saved animation IDs, bone names or preset parameters.
 
 | Key / Page | Purpose |
 | --- | --- |
@@ -69,7 +71,7 @@ Use the language menu at the **far left** of the panel to select **繁體中文*
 
 For hotkey playback, **press the same key to stop**. Pressing another configured key stops the current animation and switches to that preset. Empty or disabled slots do nothing. If a character requirement is not met, follow the prompt to change the controlled Endministrator or partner.
 
-BEM's module web page also provides controls. Its FBX picker, Blender folder picker and clip Save As controls open native dialogs. If a dialog is unavailable, open the Num0 panel in-game first.
+EML's module web page also provides controls. Its FBX picker, Blender folder picker and clip Save As controls open native dialogs. If a dialog is unavailable, open the Num0 panel in-game first.
 
 Calibration can preview partner animations imported for another character. A red warning below the animation selector indicates a different original binding. If bones look incorrect, select the desired character and reimport. **Enable Cross-Character Animation Reuse** in Interaction Presets is off by default; enable it to use another character’s calibrated preset on the currently selected partner. Height differences cause position offsets. Main-character binding remains enforced.
 
@@ -229,7 +231,7 @@ The **Free Camera** tab is immediately left of **External Models** (EFMI). Manua
 | Reset Camera Position | Return near the controlled character |
 | Press toggle shortcut | Return to normal game view |
 
-Confirm the shortcut on the Free Camera tab, close the panel with Num0 or Esc, then press that key to enter or exit. Camera controls pause while the panel is open. Leaving the game window automatically exits free camera. Disable BEM first-person/camera modules before use.
+Confirm the shortcut on the Free Camera tab, close the panel with Num0 or Esc, then press that key to enter or exit. Camera controls pause while the panel is open. Leaving the game window automatically exits free camera. Disable other first-person/camera modules before use.
 
 Enable “Hide game UI when starting free camera” to hide the game interface and restore it on exit. This preference is saved. The EAI panel and performance overlay remain visible. Hold Shift to double movement speed.
 
@@ -274,7 +276,7 @@ Files saved through native Save As go to your chosen location, separately from t
 
 | Symptom | Suggested action |
 | --- | --- |
-| Connection fails / hook occupied | Disable BEM's camera module, restart and check BEM's module log |
+| Connection fails / hook occupied | Disable other camera modules, restart and check EML's module log |
 | Blender not found | Choose a folder containing blender.exe and check Current path |
 | FBX import requires stopping | Stop active playback or calibration before importing |
 | Character mismatch | Use the required Endministrator/operator; reimport FBX for another operator |
@@ -290,6 +292,6 @@ Supported source rigs primarily include Mixamo and the currently supported Choco
 
 ## 10. Report a Problem
 
-Include EAI and BEM versions, controlled Endministrator, partner, animation name, additional pose, support mode, reproduction steps and screenshots. State whether an animation problem already exists in the FBX or appears only after import.
+Include EAI and EML versions, controlled Endministrator, partner, animation name, additional pose, support mode, reproduction steps and screenshots. State whether an animation problem already exists in the FBX or appears only after import.
 
 The module log is `Interaction.Diagnostics.log` beside the DLL. FBX import directories contain `result.json` and `conversion-report.json`. For bone/placement issues, provide values and screenshots paused on the same frame.

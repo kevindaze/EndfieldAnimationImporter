@@ -69,9 +69,10 @@ int main(){
  std::set_terminate([]{try{if(auto e=std::current_exception())std::rethrow_exception(e);}catch(const std::exception& e){std::fprintf(stderr,"Unhandled test exception: %s\n",e.what());}std::abort();});
  using namespace Fake;
  BE_HostApiV1 helpers{};helpers.runtime_invoke=Invoke;helpers.object_unbox=Unbox;helpers.copy_managed_string=Copy;helpers.gchandle_new=Pin;helpers.gchandle_free=Free;helpers.field_get_value_object=Field;
- BE_PoseLeaseApiV1 leaseApi{1,Acquire,Owns,Release};runtime=&helpers;leases=&leaseApi;poseContracts=true;unityThread=GetCurrentThreadId();animator.type_object=&body;
+ EaiPose::Api leaseApi{1,Acquire,Owns,Release};runtime=&helpers;leases=&leaseApi;poseContracts=true;unityThread=GetCurrentThreadId();animator.type_object=&body;
  for(size_t i=0;i<std::size(methods);++i)methods[i].resolved.method_info=reinterpret_cast<void*>(i+1);
  root.children={&neck};neck.parent=&root;neck.children={&head};head.parent=&neck;
+ leases=EaiPose::GetApi();Check(BeginPose(),"animation binds with EAI ownership without a BEM Host service");ApplyPose();StopPose("internal ownership integration",true);Check(!EaiPose::ownership.Acquire(nullptr,id)&&pins==0,"internal ownership integration releases handles");leases=&leaseApi;
  Check(BeginPose(),"verified Perlica body can bind despite a weapon Animator");
  for(int i=0;i<600;++i)ApplyPose();
  Check(PoseMath::SameRotation(head.rotation,PoseMath::Yaw20()),"real module does not accumulate yaw over 600 frames");

@@ -94,3 +94,10 @@ git push -u origin main
 流程先在 Windows 編譯 C++ 與執行測試，再封裝新 DLL 及執行資源。原始碼、測試、docs 與外部模型描述不放進 ZIP；必要 motions 資料與第三方授權保留。詳細建置方式參考 repo 的 BUILDING.md。
 
 若 Actions 因組織權限或標籤規則拒絕建立 Release，需在儲存庫／組織設定允許工作流程寫入 contents 與建立版本標籤。首次雲端執行仍須在上傳後確認。
+
+
+## EML compatibility checks
+
+The normal CTest suite includes internal ownership and EML V1 connection-contract tests. To compile the connection test against an EML checkout, configure with `-DEAI_EML_SDK_DIR=<EML checkout>/include`.
+
+For a read-only packaged-DLL smoke test, build EML's `src/native` and run `python tests/eml_host_smoke.py --host <EModLoader.OfflineHost.exe> --zip <module ZIP> --work <temporary test directory>`. This checks native loading and communication; it does not validate live-game visuals. EAI retains its existing data paths.

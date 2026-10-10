@@ -1,0 +1,6 @@
+#include "pose_ownership.h"
+#include <atomic>
+#include <iostream>
+#include <thread>
+#include <vector>
+int main(){EaiPose::Ownership manager;int root=0,other=0;int failures=0;auto check=[&](bool ok){if(!ok)++failures;};check(!manager.Acquire(nullptr,"eai")&&!manager.Acquire(&root,"")&&!manager.Acquire(&root,nullptr));auto first=manager.Acquire(&root,"eai");check(first&&manager.Owns(&root,"eai",first));check(!manager.Acquire(&root,"eai")&&!manager.Acquire(&root,"other"));check(!manager.Owns(&root,"other",first)&&!manager.Release(&root,"other",first)&&!manager.Release(&other,"eai",first));check(manager.Release(&root,"eai",first));auto second=manager.Acquire(&root,"eai");check(second!=first&&!manager.Owns(&root,"eai",first)&&!manager.Release(&root,"eai",first));manager.Clear();auto third=manager.Acquire(&root,"eai");check(third!=second&&!manager.Release(&root,"eai",second));manager.Clear();std::atomic<int> acquired=0;std::vector<std::thread> workers;for(int i=0;i<16;++i)workers.emplace_back([&]{if(manager.Acquire(&root,"eai"))++acquired;});for(auto& worker:workers)worker.join();check(acquired==1);std::cout<<(failures?"FAIL":"PASS")<<": internal pose ownership, stale tokens, owner checks, reset, concurrent acquisition\n";return failures?1:0;}

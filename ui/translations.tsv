@@ -435,3 +435,11 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 啟用角色動畫互用	Enable Cross-Character Animation Reuse
 讀取參數設定JSON	Load Parameter Settings JSON
 請勾選啟用角色動畫互用，或選擇此設定的校準角色	Enable Cross-Character Animation Reuse, or select the character used to calibrate this preset
+使用 EML 載入本模組；請停用其他第一人稱／相機模組並重啟遊戲。	Load this module through EML; disable other first-person / camera modules and restart the game.
+請停用其他第一人稱／相機模組並重啟遊戲。	Disable other first-person / camera modules and restart the game.
+本模組由 EML 載入；EFMI 請依其安裝方式另行啟動。	EML loads this module; start EFMI separately according to its installation instructions.
+連接入口被獨占；停用其他相機模組並重啟遊戲後再連接	The game entry is exclusively occupied; disable other camera modules and restart before connecting.
+請核對 EML 與遊戲版本	Check the EML and game versions
+請查看 EML 模組日誌	Check the EML module log
+已同步原生槽位，但載入器網頁配置超過上限，請使用遊戲面板保存	Native slots are synchronized, but the loader web configuration is too large. Save through the in-game panel.
+只修改獨立 EFMI 橋接檔。	Only the separate EFMI bridge file is modified.

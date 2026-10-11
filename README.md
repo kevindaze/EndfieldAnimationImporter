@@ -1,6 +1,6 @@
 # EndfieldAnimationImporter 使用手冊
 
-> **載入器版本備註：** 1.4.0（含）以前使用 [BEM（Better Endfield）](https://github.com/Dr-hydra/Better-Endfield) 載入；1.5.0 起使用 [EML（Endfield Mod Loader）](https://github.com/Dr-hydra/Endfield-Mod-Loader) 載入。
+> **載入器版本備註：** 1.4.0（含）以前使用 [BEM 3.4.3（Better Endfield）](https://github.com/Dr-hydra/Better-Endfield) 載入；1.5.0 起使用 [EML（Endfield Mod Loader）](https://github.com/Dr-hydra/Endfield-Mod-Loader) 載入。
 
 繁體中文 | [English](README.en.md)
 

@@ -1,6 +1,6 @@
 # EndfieldAnimationImporter User Guide
 
-> **Loader compatibility:** Version 1.4.0 and earlier use [BEM (Better Endfield)](https://github.com/Dr-hydra/Better-Endfield); version 1.5.0 onward uses [EML (Endfield Mod Loader)](https://github.com/Dr-hydra/Endfield-Mod-Loader).
+> **Loader compatibility:** Version 1.4.0 and earlier use [BEM 3.4.3(Better Endfield)](https://github.com/Dr-hydra/Better-Endfield); version 1.5.0 onward uses [EML (Endfield Mod Loader)](https://github.com/Dr-hydra/Endfield-Mod-Loader).
 
 [繁體中文](README.md) | English
 

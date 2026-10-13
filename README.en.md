@@ -4,7 +4,7 @@
 
 [繁體中文](README.md) | English
 
-Version: 1.5.0-Alpha · Windows x64
+Version: 1.6.5-Alpha · Windows x64
 
 ## Before You Start
 
@@ -113,6 +113,16 @@ Connect the game entry, check the toggle shortcut under **Free Camera**, close t
 
 Enable **Hide Game UI When Camera Starts** to hide the game interface and restore it on exit.
 
+## Breast Physics
+
+Enable **Enable Partner Breast Physics** on the **Breast Physics** page.
+
+- **Automatically Apply to Partner** follows the selected partner.
+- **Automatically Apply to Controlled Character** follows the controlled character; only one automatic mode can be enabled.
+- Manual selection disables both automatic modes and targets a non-controlled squad member.
+- Built-in presets are used without parameter controls. Only one character is affected; missing presets or bones are reported on the page.
+- Do not apply another breast physics module to the same character simultaneously.
+
 ## EFMI External Model Adjustments
 
 Install EFMI and the appearance mod separately.
@@ -142,3 +152,7 @@ Reload after restoring defaults or disabling the bridge too. Mesh changes are no
 If the problem persists, provide EAI/EML versions, characters, animation filename, steps, and screenshots. Check EML logs or `Interaction.Diagnostics.log` beside the DLL.
 
 To back up settings and animations, copy the entire `%LOCALAPPDATA%\BetterEndfield\Interaction` folder.
+
+## Credits
+
+Breast bone and character calibration data are based on [Sp1cHless’s Secondary-bodyphysics](https://github.com/Sp1cHless/Arknights-Endfield-Plugin-Secondary-bodyphysics).

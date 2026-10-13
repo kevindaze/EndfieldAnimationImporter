@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-適用版本：1.5.0-Alpha｜Windows x64
+適用版本：1.6.5-Alpha｜Windows x64
 
 ## 使用前準備
 
@@ -113,6 +113,16 @@ VMD 直接選檔即可，不需 MMD 參考模型；只匯入動作。**不保證
 
 勾選「啟動相機時隱藏遊戲UI」可隱藏遊戲介面；退出後還原。
 
+## 胸部晃動
+
+在「胸部晃動」頁勾選「啟用互動角色胸部物理」。
+
+- 勾選「自動套用到互動角色」：跟隨目前互動角色。
+- 勾選「自動套用到主控角色」：跟隨目前主控，與自動套用互動角色互斥。
+- 手動選擇角色：關閉兩個自動選項，改套用至隊伍中的指定非主控角色。
+- 只使用內建預設，同時作用於一個角色。缺少預設或胸部骨架時，頁面會提示原因。
+- 請勿同時讓其他胸部物理模組套用到同一角色。
+
 ## EFMI 外部模型調整
 
 需另外安裝 EFMI 與外觀模組。
@@ -142,3 +152,7 @@ VMD 直接選檔即可，不需 MMD 參考模型；只匯入動作。**不保證
 仍無法解決時，提供 EAI／EML 版本、使用角色、動畫檔名、操作步驟及畫面。日誌可在 EML 查看，或使用 DLL 旁的 `Interaction.Diagnostics.log`。
 
 備份設定與動畫庫：複製 `%LOCALAPPDATA%\BetterEndfield\Interaction` 整個資料夾。
+
+## 致謝
+
+胸部骨架與角色預設資料參考 [Sp1cHless 的 Secondary-bodyphysics](https://github.com/Sp1cHless/Arknights-Endfield-Plugin-Secondary-bodyphysics)。

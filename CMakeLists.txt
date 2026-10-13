@@ -19,7 +19,7 @@ set_target_properties(interaction PROPERTIES OUTPUT_NAME "Endfield.Interaction" 
 add_executable(validate_animation tools/validate_animation.cpp)
 target_link_libraries(validate_animation PRIVATE eai_dependencies)
 if(BUILD_TESTING)
-  foreach(test handshake_motion pose_math runtime_simulation follow_metadata external_models efmi_bridge external_mesh free_camera free_camera_input language pose_ownership eml_connection)
+  foreach(test handshake_motion pose_math runtime_simulation follow_metadata external_models efmi_bridge external_mesh free_camera free_camera_input breast_physics language pose_ownership eml_connection)
     add_executable(${test}_tests src/${test}_tests.cpp)
     target_link_libraries(${test}_tests PRIVATE eai_dependencies)
     if(test STREQUAL "handshake_motion")

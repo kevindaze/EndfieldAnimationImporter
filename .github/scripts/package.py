@@ -35,6 +35,8 @@ def main():
              'ui/index.html': ROOT / 'ui/index.html', 'ui/language-catalog.js': ROOT / 'ui/language-catalog.js', 'ui/language.js': ROOT / 'ui/language.js', 'tools/retarget_fbx.py': ROOT / 'tools/retarget_fbx.py',
              'NLOHMANN-LICENSE.MIT': ROOT / 'third_party/nlohmann/LICENSE.MIT',
              'BETTER-ENDFIELD-LICENSE.txt': ROOT / 'third_party/better-endfield/LICENSE'}
+    files['SECONDARY-BODYPHYSICS-LICENSE.txt'] = ROOT / 'third_party/secondary-bodyphysics/LICENSE'
+    files['SECONDARY-BODYPHYSICS-NOTICE.md'] = ROOT / 'third_party/secondary-bodyphysics/NOTICE.md'
     motions = ROOT / 'native/windows-x64/motions'
     files['tools/retarget_vmd.py'] = ROOT / 'tools/retarget_vmd.py'
     files['tools/standard_mmd.py'] = ROOT / 'tools/standard_mmd.py'

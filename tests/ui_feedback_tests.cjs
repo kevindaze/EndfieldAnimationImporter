@@ -35,3 +35,5 @@ document.getElementById('previewAnimation').value='clip:warning';await document.
 listener({kind:'event',body:{type:'calibration_target_selected',target:'chr_0005_chen',target_name:'Chen'}});assert(document.getElementById('partnerBindingWarning').hidden);
 const parameterRow=document.getElementById('presetSlots').children[0].children[4];assert.equal(parameterRow.children[0].textContent,'套用已準備設定');assert.equal(parameterRow.children[1].textContent,'讀取參數設定JSON');
 console.log('PASS: full bone lazy controls, live change flush before export, reset, four pages, free camera controls, external bridge controls, feedback, bone controls, prepared invalidation/export, per-slot JSON import, animation drag order/delete and preview');})().catch(e=>{console.error(e);process.exitCode=1});
+
+require('./breast_physics_ui_tests.cjs');

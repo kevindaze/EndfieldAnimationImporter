@@ -443,3 +443,31 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 請查看 EML 模組日誌	Check the EML module log
 已同步原生槽位，但載入器網頁配置超過上限，請使用遊戲面板保存	Native slots are synchronized, but the loader web configuration is too large. Save through the in-game panel.
 只修改獨立 EFMI 橋接檔。	Only the separate EFMI bridge file is modified.
+胸部晃動	Breast Physics
+啟用互動角色胸部物理	Enable Partner Breast Physics
+自動套用到互動角色	Automatically Apply to Partner
+手動選擇套用角色：	Manually Select Character: 
+手動選擇會關閉自動套用；只作用於隊伍中的非主控角色。	Manual selection disables automatic selection; applies only to non-controlled squad members.
+胸部物理未啟用	Breast physics disabled
+此角色沒有胸部物理預設	No breast physics preset for this character
+原模組未啟用此角色的預設	The original preset disables this character
+請選擇套用角色	Select a character
+找不到唯一的隊伍角色；不套用到主控	No unique squad member found; controlled character is excluded
+角色缺少胸部骨架，無法套用物理	Required breast bones missing
+角色骨架控制權暫不可用	Skeleton ownership unavailable
+互動動畫已停止	Partner animation stopped
+胸部骨架讀取失敗	Breast bone read failed
+胸部物理寫入失敗	Breast physics write failed
+胸部物理已套用：	Breast physics applied: 
+胸部物理重播失敗	Breast physics replay failed
+胸部物理動畫入口尚未就緒	Breast animation hook not ready
+胸部物理缺少 PreLateTick 動畫入口；未啟用	PreLateTick hook unavailable; breast physics disabled
+動畫回呼：	Animation callbacks:
+重播：	Replays:
+角度：	Angle:
+配角回呼：	Partner callbacks:
+自動套用到主控角色	Automatically Apply to Controlled Character
+兩種自動套用互斥；手動選擇會關閉自動套用。	Only one automatic mode can be enabled; manual selection disables both.
+找不到唯一的指定角色	No unique selected character found
+缺少胸腔方向骨架，無法套用物理	Chest orientation bones missing; physics disabled
+胸腔方向或骨架讀取失敗	Chest orientation or bone read failed

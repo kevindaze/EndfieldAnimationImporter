@@ -36,6 +36,7 @@ try:
   return wait(lambda:next((m for m in request('/poll',{'module_id':module})['messages'] if m.get('request_id')==request_id),None))
  assert reply('workflow_get','workflow')['result']==0
  assert reply('presets_get','presets')['result']==0
+ physics=reply('breast_physics_get','physics');assert physics['result']==0 and len(physics['body']['breast_physics']['characters'])==20
  connection=reply('connect','connect');assert connection['result']==2 and 'runtime' in connection['body']['detail']
  print('PASS: EML loads packaged EAI '+manifest['version']+', initializes, dispatches native replies, and safely reports offline runtime unavailable')
 finally:

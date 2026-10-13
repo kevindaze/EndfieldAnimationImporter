@@ -24,6 +24,7 @@ bool TimelineActionSingle(InteractionPanel::Action action,int index=0,float valu
  auto clip=SelectedTimelineClip(main);if(!clip)return false;StoreTimeline(main);calibrationMode=true;auto& d=DraftTimeline(main);
  auto& time=main?pose.mainTime:pose.clipTime;auto& paused=main?pose.mainPaused:pose.clipPaused;auto& scrub=main?pose.mainScrubbing:pose.scrubbing;
  using A=InteractionPanel::Action;
+ if(action==A::Seek||action==A::Step){breast.spring.Reset();breast.cached=false;}
  if(action==A::Seek||action==A::Step){if(!std::isfinite(value))return false;d.time=std::clamp(action==A::Step?d.time+index/30.f:value,0.f,clip->duration);if(SelectedTimelineActive(main)){(main?pendingMainSeek:pendingSeek)=d.time;paused=true;scrub=true;}else QueueCalibrationPreview(true,main);}
  else if(action==A::MarkIn){if(d.end-d.time<.2f){panelStatus="區間至少 0.2 秒";return false;}d.start=d.time;}
  else if(action==A::MarkOut){if(d.time-d.start<.2f){panelStatus="區間至少 0.2 秒";return false;}d.end=d.time;}

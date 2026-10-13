@@ -1,0 +1,25 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const html=fs.readFileSync('ui/index.html','utf8');
+const elements=new Map();
+function element(){return {checked:false,disabled:false,options:[],value:'',textContent:'',replaceChildren(){this.options=[]},append(o){this.options.push(o)}}}
+const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)},createElement(){return element()}};
+const source=html.slice(html.indexOf('function renderBreast(data)'),html.indexOf("for(const id of ['breastEnabled'"));
+assert(source.includes('function renderBreast'));
+const context={document};vm.createContext(context);vm.runInContext(source,context);
+context.renderBreast({enabled:false,automatic:true,manual:'chr_a',status:'disabled',characters:[{id:'chr_a',name:'A'},{id:'chr_b',name:'B'}]});
+assert.equal(document.getElementById('breastOptions').disabled,true);
+assert.equal(document.getElementById('breastCharacter').options.length,3);
+assert.equal(document.getElementById('breastCharacter').value,'chr_a');
+assert.equal(document.getElementById('breastStatus').textContent,'disabled');
+context.renderBreast({enabled:true,automatic:false,manual:'chr_b',characters:[{id:'chr_a',name:'A'},{id:'chr_b',name:'B'}]});
+assert.equal(document.getElementById('breastOptions').disabled,false);
+assert.equal(document.getElementById('breastAutomatic').checked,false);
+assert.equal(document.getElementById('breastCharacter').value,'chr_b');
+assert(html.includes("if(id==='breastCharacter'){document.getElementById('breastAutomatic').checked=false;"));
+context.renderBreast({enabled:true,automatic:false,automatic_main:true,manual:'',characters:[]});assert(document.getElementById('breastAutomaticMain').checked);assert(!document.getElementById('breastAutomatic').checked);
+assert(html.includes("if(id==='breastAutomatic'&&e.target.checked)document.getElementById('breastAutomaticMain').checked=false"));
+assert(html.includes("if(id==='breastAutomaticMain'&&e.target.checked)document.getElementById('breastAutomatic').checked=false"));
+const {translateEai}=require('../ui/language-catalog.js');
+assert.equal(translateEai('胸部晃動',true),'Breast Physics');
+assert.equal(translateEai('☑ 啟用互動角色胸部物理',true),'☑ Enable Partner Breast Physics');
+console.log('PASS: breast physics controls, master gate, character selection and English labels');

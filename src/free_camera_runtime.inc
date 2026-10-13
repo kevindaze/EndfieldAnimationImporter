@@ -115,6 +115,7 @@ void ApplyFreeCameraView(){
 }
 void PumpFreeCamera(float dt){
  int toggles=FreeCameraInput::toggleRequests.exchange(0);if(toggles%2)freeCamera.request=freeCamera.enabled?0:1;
+ if(FreeCameraInput::escapeRequested.exchange(false)&&freeCamera.enabled)freeCamera.request=0;
  if(freeCamera.request==0){freeCamera.request=-1;StopFreeCamera();}
  if(freeCamera.request==1&&GameFocused()){freeCamera.request=-1;if(!freeCamera.enabled)BeginFreeCamera();}
  if(!freeCamera.enabled){if(FreeCameraInput::blocked&&FreeCameraInput::AllReleased()){FreeCameraInput::blocked=false;presetKeys.fill(true);}return;}

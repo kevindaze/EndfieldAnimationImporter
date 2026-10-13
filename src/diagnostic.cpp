@@ -650,7 +650,7 @@ bool PrepareCalibration(Presets::Entry entry){
 }
 bool PreparePreset(int index){
  if(index<0||index>=9)return false;auto entry=presetBank.slots[index];
- if(entry.animation.starts_with("clip:")&&!workflow.draft.target.empty()){auto clip=animationLibrary.find(entry.animation.substr(5));if(clip!=animationLibrary.end()&&clip->second->absolute&&clip->second->targetActor==1&&entry.target!=workflow.draft.target){if(!partnerAnimationReuse){Event("preset_partner_reuse_disabled");return false;}entry.target=workflow.draft.target;}}
+ if(entry.animation.starts_with("clip:")&&!workflow.draft.target.empty()){auto clip=animationLibrary.find(entry.animation.substr(5));if(clip!=animationLibrary.end()&&clip->second->absolute&&clip->second->targetActor==1&&entry.target!=workflow.draft.target){if(partnerAnimationReuse)entry.target=workflow.draft.target;}}
  return PrepareEntry(entry);
 }
 #include "timeline_edit.inc"
@@ -692,7 +692,7 @@ void PumpPose(float dt=1.0f/60){
    ((IsDual(pose.mode))&&!leases->owns(pose.reverse.root,id,pose.reverse.lease))||movement)
    StopPose("focus/character/model/lease changed or timeout",true);
  }
- std::array<bool,9> pressed{};for(int i=0;i<9;++i)pressed[i]=(GetAsyncKeyState(VK_NUMPAD1+i)&0x8000)!=0;PumpPresetKeys(pressed,GameFocused()&&!InteractionPanel::Editing()&&!FreeCameraInput::blocked);
+ std::array<bool,9> pressed{};for(int i=0;i<9;++i)pressed[i]=FreeCameraInput::PresetDown(i,[](int key){return GetAsyncKeyState(key);});PumpPresetKeys(pressed,GameFocused()&&!InteractionPanel::Editing()&&(!FreeCameraInput::blocked||freeCamera.enabled));
  if(pendingMainStop||pendingPartnerStop){if(pose.mode==Mode::Custom){if(pendingMainStop)StopAnimationActor(0);if(pendingPartnerStop)StopAnimationActor(1);}else StopPose("actor stop",true);pendingMainStop=pendingPartnerStop=false;}PlaybackAudit(dt,true);if(!RemoveBoneLayer(true)){StopPose("bone layer restoration failed",true);return;}if(pendingMainSeek&&pose.pins&&pose.controlledClip){pose.mainTime=std::clamp(*pendingMainSeek,0.f,pose.controlledClip->duration);pose.mainScrubbing=pose.mainPaused;pendingMainSeek.reset();}if(pendingSeek&&pose.pins&&pose.clip){pose.clipTime=std::clamp(*pendingSeek,0.f,pose.clip->duration);pose.scrubbing=pose.clipPaused;pendingSeek.reset();}if(pose.pins&&pose.mode==Mode::Custom&&(pose.support.mode!=supportTarget&&!BindSupport(pose)||pose.mainSupport.mode!=controlledSupport&&!BindSupport(pose,0))){StopPose("support binding failed",true);return;}ApplyPose(dt);ApplyBoneLayer();if(!ApplySupport()||!ApplySupport(0)){auto status=panelStatus;StopPose("support solve failed",true);Event(status.starts_with("support_")?status.c_str():"support_update_failed");return;}if(pose.pins&&pose.support.mode!="none"&&!ApplyManagerMotion(0,1)){StopPose("supported contact update failed",true);return;}AuditScene();PlaybackAudit(dt,false);
 }
 void Tree(void* transform,int depth,int& budget,Pins& pins){
@@ -875,7 +875,7 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 1.6.6-Alpha initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 2.0.0 initialized; follow research is read-only; verified preview modes retained");
  FreeCameraInput::Start();
  if(!InteractionPanel::Start(PanelRead,PanelExecute))Log("Interaction overlay unavailable; use module web UI");
  if(!output)Log("Persistent log unavailable; Host retains only its recent diagnostic messages");

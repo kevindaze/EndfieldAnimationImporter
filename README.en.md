@@ -4,7 +4,7 @@
 
 [繁體中文](README.md) | English
 
-Version: 1.6.6-Alpha · Windows x64
+Version: 2.0.0 · Windows x64
 
 ## Before You Start
 
@@ -82,7 +82,7 @@ Support does not automatically detect the ground. Adjust the character root's Y 
 
 **Press the same key to stop; press another configured key to switch animations.** Prepare and apply the settings again after changing calibration.
 
-To use another character's calibrated preset on the selected partner, enable **Cross-Character Animation Reuse**. Different proportions cause placement offsets. When disabled, select the original calibrated character.
+To use another character's calibrated preset on the selected partner, enable **Cross-Character Animation Reuse**. Different proportions cause placement offsets. Hotkeys use the saved partner when disabled, and the currently selected partner when enabled.
 
 ## Save Clips and Share
 
@@ -101,7 +101,7 @@ To share a clip: save the clip as JSON → import that JSON → select and calib
 
 ## Free Camera
 
-Connect the game entry, check the toggle shortcut under **Free Camera**, close the panel, and press the shortcut to enable it. Press it again to exit. The default is **F9** and can be changed.
+Connect the game entry, check the toggle shortcut under **Free Camera**, close the panel, and press the shortcut to enable it. Press it again or press **Esc** to exit. The default is **F9** and can be changed. While Free Camera is active, press **1–9 (number row or numpad)** to play interaction presets; press the same key to stop or another key to switch.
 
 | Control | Purpose |
 | --- | --- |

@@ -9,7 +9,7 @@
 #include "overlay_panel.h"
 #include "free_camera_math.h"
 namespace FreeCameraInput {
-inline std::atomic_bool blocked{false},enabled{false},ready{false},focusLost{false},toggleHeld{false};
+inline std::atomic_bool blocked{false},enabled{false},ready{false},focusLost{false},toggleHeld{false},escapeHeld{false},escapeRequested{false};
 inline std::atomic<int> hotkey{VK_F9},toggleRequests{0},mouseX{0},mouseY{0};
 inline std::array<std::atomic_bool,256> keys{},rawKeys{};
 inline std::array<std::atomic<ULONGLONG>,256> rawAt{};
@@ -22,7 +22,7 @@ inline DataFn nextData=nullptr;inline BufferFn nextBuffer=nullptr;
 inline bool Focused(){DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);return pid==GetCurrentProcessId();}
 inline bool OwnInput(){return Focused()&&!InteractionPanel::Editing();}
 inline void ClearMotion(){mouseX=mouseY=0;}
-inline void Clear(){for(auto& key:keys)key=false;for(auto& key:rawKeys)key=false;for(auto& at:rawAt)at=0;ClearMotion();toggleHeld=false;}
+inline void Clear(){for(auto& key:keys)key=false;for(auto& key:rawKeys)key=false;for(auto& at:rawAt)at=0;ClearMotion();toggleHeld=false;escapeHeld=false;escapeRequested=false;}
 inline bool AllReleased(){for(int i=1;i<256;++i)if(i!=VK_NUMPAD0&&i!=VK_SHIFT&&i!=VK_CONTROL&&i!=VK_MENU&&keys[i])return false;return true;}
 inline int NormalizeKey(int key,USHORT code,USHORT flags){if(key==VK_SHIFT)return code==0x36?VK_RSHIFT:VK_LSHIFT;if(key==VK_CONTROL)return flags&RI_KEY_E0?VK_RCONTROL:VK_LCONTROL;if(key==VK_MENU)return flags&RI_KEY_E0?VK_RMENU:VK_LMENU;return key;}
 inline void RawButton(int key,bool down,ULONGLONG now){rawKeys[key]=down;keys[key]=down;rawAt[key]=now;}
@@ -68,10 +68,12 @@ inline bool Install(const BE_HookChainApiV1* hooks,const char* id){
  if(hooks->create(hooks->context,id,reinterpret_cast<void*>(buffer),reinterpret_cast<void*>(&Buffer),reinterpret_cast<void**>(&nextBuffer),&bufferHook)!=BE_Result_Ok){hooks->disable(hooks->context,dataHook);dataHook=0;return false;}
  ready=true;return true;
 }
+template<class Read> inline bool PresetDown(int index,Read read){if(index<0||index>=9)return false;bool camera=enabled.load();return (read(VK_NUMPAD1+index)&0x8000)!=0||(camera&&(keys[VK_NUMPAD1+index].load()||keys['1'+index].load()||(read('1'+index)&0x8000)!=0));}
 // Keyboard polling is independent of raw delivery. No WH_KEYBOARD_LL dependency.
 template<class Read> inline void Poll(Read read,bool own,ULONGLONG now,bool& previous){
  for(int key=1;key<256;++key){bool down=(read(key)&0x8000)!=0;auto at=rawAt[key].load();keys[key]=at&&now-at<250?rawKeys[key].load():down;}
  bool down=(read(hotkey.load())&0x8000)!=0;toggleHeld=down&&own;if(down&&!previous&&own)++toggleRequests;previous=down;
+ bool escape=keys[VK_ESCAPE].load();if(escape&&!escapeHeld.exchange(escape)&&enabled&&own)escapeRequested=true;else escapeHeld=escape;
 }
 inline DWORD WINAPI Run(void*){
  MSG message{};PeekMessageW(&message,nullptr,0,0,PM_NOREMOVE);auto timer=SetTimer(nullptr,0,10,nullptr);bool previous=true;POINT last{};GetCursorPos(&last);if(started)SetEvent(started);

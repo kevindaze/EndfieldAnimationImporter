@@ -50,7 +50,7 @@ void PumpBreast(float dt){
  frame=PoseMath::Multiply(chestWorld,breast.chestReference);
 
  if(!breast.leverReady&&Value(Position,breast.right,positionR)&&Value(Position,breast.left,positionL)){auto arm=PoseMath::Rotate(PoseMath::Inverse(frame),{(positionR.x+positionL.x)*.5f-p.x,(positionR.y+positionL.y)*.5f-p.y,(positionR.z+positionL.z)*.5f-p.z});breast.lever={0,std::clamp(arm.y,-.15f,.15f),std::clamp(arm.z,.04f,.2f)};if(std::abs(breast.lever.y)<.01f)breast.lever.y=-.04f;breast.leverReady=true;}
- const auto& profile=BreastDefaults().at(target);float limit=std::max(profile.value("animation_up",0.f),profile.value("animation_down",0.f))*.01745329252f;
+ const auto& profile=BreastDefaults().at(target);float limit=std::max(profile.value("animation_up",0.f),profile.value("animation_down",0.f))*.01745329252f*2.f;
  auto angles=breast.spring.Step(p,frame,breast.lever,dt,profile.value("frequency",2.f),profile.value("damping",.52f),limit,context.paused,context.animated?.55f:0.f);
  breast.writtenR=BreastPhysics::BoneOutput(breast.baseR,worldR,frame,angles);breast.writtenL=BreastPhysics::BoneOutput(breast.baseL,worldL,frame,angles);float angle=BreastPhysics::Length(angles);
  bool wroteRight=WriteRotation(breast.right,breast.writtenR);breast.wrote=wroteRight;if(!wroteRight||!WriteRotation(breast.left,breast.writtenL)){RemoveBreastLayer();ClearBreast();breast.status="胸部物理寫入失敗";return;}

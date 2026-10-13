@@ -4,7 +4,7 @@
 
 [繁體中文](README.md) | English
 
-Version: 1.6.5-Alpha · Windows x64
+Version: 1.6.6-Alpha · Windows x64
 
 ## Before You Start
 

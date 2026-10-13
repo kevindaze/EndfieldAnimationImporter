@@ -3,7 +3,7 @@
   "id": "local.endfield.interaction",
   "name": "EndfieldAnimationImporter",
   "author": "Local Research",
-  "version": "1.6.5-Alpha",
+  "version": "1.6.6-Alpha",
   "abi": 1,
   "libraries": {
     "windows-x64": "native/windows-x64/Endfield.Interaction.dll"

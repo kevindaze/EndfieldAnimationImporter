@@ -14,6 +14,7 @@ void StoreTimeline(bool main){if(pendingSelectionStop||!SelectedTimelineActive(m
 Presets::Json TimelineJson(bool main=false){auto clip=SelectedTimelineClip(main);StoreTimeline(main);auto& d=DraftTimeline(main);return {{"id",clip?clip->id:std::string{}},{"name",clip?clip->name:std::string{}},{"duration",clip?clip->duration:0.f},{"time",d.time},{"start",d.start},{"end",d.end},{"loop",d.loop},{"paused",!SelectedTimelineActive(main)||(main?pose.mainPaused:pose.clipPaused)},{"active",SelectedTimelineActive(main)}};}
 void QueueCalibrationPreview(bool paused,bool main=false){StoreTimeline();StoreTimeline(true);if(syncAnimations&&SelectedTimelineClip(main)&&SelectedTimelineClip(!main))DraftTimeline(!main).time=std::clamp(DraftTimeline(main).time,0.f,SelectedTimelineClip(!main)->duration);calibrationMode=true;pendingPreviewPaused=paused;pendingPreviewMain=main;pendingPreview=hook!=0;pendingTimeline=paused;}
 void SelectCalibrationAnimation(bool main=false){
+ ApplyKnownPairOnSourceSelection();
  if(workflow.draft.controlledPose=="imported"&&workflow.draft.controlledAnimation.starts_with("clip:")&&!workflow.draft.animation.starts_with("clip:"))workflow.draft.animation="standing";
  StoreTimeline(!main);DraftTimeline(main)={};(main?pendingMainSeek:pendingSeek).reset();pendingPreview=false;pendingSelectionStop=true;
  if(SelectedTimelineClip(main)){QueueCalibrationPreview(true,main);panelStatus=hook?"動畫已選取，暫停預覽已排隊":"動畫資訊已展開；請先連接遊戲入口";}

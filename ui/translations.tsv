@@ -502,3 +502,45 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 角色已生成；請先移除再重新生成	Character already spawned; remove it before spawning again
 已生成並選為互動角色：	Spawned and selected as partner: 
 請選擇有效幹員	Select a valid operator
+配對動畫與角色參數已載入	Paired animation and character parameters loaded
+已配對動畫	Paired Animations
+選擇已配對動畫	Select Paired Animation
+已配對動畫：	Paired Animation: 
+從已配對動畫選單指定快捷鍵；角色專屬參數優先於互用設定。	Assign a paired animation to each hotkey. Operator-specific parameters take priority over reuse.
+此角色不在生成角色白名單中	This operator is not enabled in the spawn whitelist
+尚未選擇配對動畫	No paired animation selected
+儲存白名單設定	Save Whitelist
+配對動畫指定失敗	Failed to assign paired animation
+校準參數已變更	Calibration parameters changed
+此配對動畫已存在，請新增支援當前角色	This animation pair already exists; add support for the current operator
+匯出成配對動畫	Save Paired Animation
+男性	Male
+配對動畫已指定到快捷鍵	Paired animation assigned to hotkey
+配對動畫保存失敗	Failed to save paired animation
+未設定	Unassigned
+白名單儲存失敗	Failed to save whitelist
+配對動畫數量已達上限	Paired animation limit reached
+生成角色白名單已儲存	Spawn whitelist saved
+此角色已支援或尚未建立配對動畫	This operator is already supported or no paired animation exists
+配對動畫不存在，請重新指定快捷鍵	Paired animation missing; assign the hotkey again
+生成角色白名單	Spawn Character Whitelist
+匯出成配對動畫後，選擇另一位互動幹員，校準雙方參數，再按「新增支援當前角色」。	After saving a pair, select another partner, calibrate both characters, then add support for the current partner.
+已新增當前角色的雙方參數	Saved both characters parameters for this operator
+每位支援幹員各自保存主控與互動角色的參數。	Each supported operator stores separate parameters for both characters.
+互動角色不唯一，請重新選擇	Multiple matching partners found; select again
+新增支援當前角色	Add Support for Current Partner
+已匯出成配對動畫	Paired animation saved
+找不到配對動畫	Paired animation not found
+尚未建立配對動畫	No paired animations created
+已選擇配對動畫	Paired animation selected
+女性	Female
+配對動畫名稱：	Paired Animation Name: 
+重新命名	Rename
+名稱不可空白或超過 256 位元組	Name cannot be blank or exceed 256 bytes
+動畫缺失	Missing Animation
+保存動畫片段	Save Animation Clip
+請先選擇配對動畫	Select a paired animation first
+重新命名保存失敗	Failed to save renamed animation pair
+配對動畫已重新命名	Paired animation renamed更新當前角色參數	Update Current Partner Parameters
+已更新當前角色的雙方參數	Updated both characters’ parameters for the current partner
+尚未建立配對動畫或來源不符	No matching animation pair exists

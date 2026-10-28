@@ -1,6 +1,6 @@
 // Visual-only prototype. Never creates gameplay entities or changes the squad.
 struct SpawnCharacterState {
- int request=0;std::unique_ptr<Pins> pins;void* object=nullptr;void* main=nullptr;void* mainModel=nullptr;
+ bool selectAfterSpawn=true;int request=0;std::unique_ptr<Pins> pins;void* object=nullptr;void* main=nullptr;void* mainModel=nullptr;
  std::string selected="chr_0036_jsspsi",identity,status="尚未生成角色";
 } spawnedCharacter;
 struct SpawnContracts {
@@ -26,7 +26,7 @@ void* SpawnInvoke(const BE_ResolvedMethodV1& method,void* self=nullptr,void** ar
  if(success)*success=false;void* exception=nullptr;auto value=InvokeGuarded(method.method_info,self,args,&exception);
  if(exception){Log("Spawn invocation failed: managed exception");return nullptr;}if(success)*success=true;return value;
 }
-bool SpawnableCharacter(const std::string& id){return id!="chr_9000_endmin"&&CharacterNames::All().contains(id);}
+bool SpawnableCharacter(const std::string& id){return operatorWhitelist.Allows(id);}
 void* GeneratedPartner(const std::string& identity){return !identity.empty()&&identity==spawnedCharacter.identity&&spawnedCharacter.object&&Living(spawnedCharacter.object)?spawnedCharacter.object:nullptr;}
 // Generated visuals have no gameplay Entity. Never pass their GameObject to Entity APIs.
 template<class Visit> void EachPartner(Pins& pins,Visit visit){
@@ -79,7 +79,16 @@ void PumpSpawnCharacter(){
  if(!spawnedCharacter.object||!output||!WriteValue(SetPosition,output,position)||!WriteValue(SetWorldRotation,output,PoseMath::Multiply(rotation,PoseMath::YawPitch(180,0)))){RemoveSpawnedCharacter();spawnedCharacter.status="生成角色定位失敗";return;}
  void* enable[]{&on};SpawnInvoke(spawnContracts.setActive,object,enable,&ok);
  if(!ok){RemoveSpawnedCharacter();spawnedCharacter.status="生成角色顯示失敗";return;}
- spawnedCharacter.identity=spawnedCharacter.selected;workflow.draft.target=spawnedCharacter.identity;selectedIdentity=spawnedCharacter.identity;selectedSlot=-1;selectedModel.clear();boneTarget.Reset(1);workflow.draft.bones=boneTarget;boneCatalog.clear();++boneGeneration;workflow.Invalidate();targetsPending=true;
+ spawnedCharacter.identity=spawnedCharacter.selected;if(spawnedCharacter.selectAfterSpawn){workflow.draft.target=spawnedCharacter.identity;selectedIdentity=spawnedCharacter.identity;selectedSlot=-1;selectedModel.clear();boneTarget.Reset(1);workflow.draft.bones=boneTarget;boneCatalog.clear();++boneGeneration;workflow.Invalidate();pendingRoleSelection=spawnedCharacter.identity;}targetsPending=true;pairedUiPending=true;
  spawnedCharacter.status="已生成並選為互動角色："+CharacterNames::Name(spawnedCharacter.identity);Log("Spawn character: "+spawnedCharacter.identity+" visual instance created");
 }
 Presets::Json SpawnCharacterJson(){auto characters=Presets::Json::array();for(auto& [id,name]:CharacterNames::All())if(SpawnableCharacter(id))characters.push_back({{"id",id},{"name",name}});return {{"spawned",spawnedCharacter.object!=nullptr},{"status",spawnedCharacter.status},{"character",spawnedCharacter.selected},{"identity",spawnedCharacter.identity},{"characters",characters}};}
+
+// Called only by the gameplay-thread playback/selection pipeline.
+bool EnsureInteractionPartner(const std::string& target){
+ int matches=0;{Pins pins;EachPartner(pins,[&](void*,void* model,int){if(Presets::Identity(ObjectName(model))==target)++matches;});}
+ if(matches==1)return true;if(matches>1){panelStatus="互動角色不唯一，請重新選擇";return false;}
+ if(!SpawnableCharacter(target)){panelStatus="此角色不在生成角色白名單中";return false;}
+ auto selection=spawnedCharacter.selected;spawnedCharacter.selected=target;spawnedCharacter.selectAfterSpawn=false;spawnedCharacter.request=1;PumpSpawnCharacter();spawnedCharacter.selectAfterSpawn=true;spawnedCharacter.selected=selection;
+ if(!GeneratedPartner(target)){panelStatus=spawnedCharacter.status;return false;}return true;
+}

@@ -4,18 +4,18 @@
 
 [繁體中文](README.md) | English
 
-Version: 2.2.0 · Windows x64
+Version: 2.3.3 · Windows x64
 
 ## Before You Start
 
 - Install EML. Importing FBX/VMD also requires [Blender](https://www.blender.org/download/) 4.2 or later.
-- Control the male or female Endministrator. The partner must be in your squad.
+- Control the male or female Endministrator. Partners can be selected from the whitelist and are spawned automatically when outside the squad.
 - Disable other first-person/camera modules before starting the game.
 
 1. Import the EAI ZIP in EML, enable it, and use **Launch Game**. Restart the game after updating the module.
 2. Enter a playable scene and press **Num0** to open the panel.
 3. Under **Module Settings → Partner**, select **Connect Game Entry**.
-4. Refresh the squad list, select a partner, and apply the selection.
+4. Choose a partner from the whitelist dropdown. A model is spawned automatically if the operator is not in your squad.
 
 ## Quick Start
 
@@ -23,8 +23,8 @@ Version: 2.2.0 · Windows x64
 flowchart TD
     A[Connect and select characters] --> B[Import FBX / VMD]
     B --> C[Select animation and calibrate]
-    C --> D[Prepare for Interaction Presets]
-    D --> E[Choose a slot and apply settings]
+    C --> D[Save Paired Animation]
+    D --> E[Choose paired animation for slot]
     E --> F[Return to gameplay and press numpad key]
 ```
 
@@ -73,31 +73,39 @@ Pause at the same frame before adjusting to make comparison easier.
 
 Support does not automatically detect the ground. Adjust the character root's Y position if a foot or knee is at the wrong height. Stop and replay to reset the support point.
 
-## Set Up Hotkeys
+## Paired Animations and Hotkeys
 
-1. After calibration, select **Prepare for [Interaction Presets]**.
+1. Calibrate both characters, then press **Save Paired Animation**.
 2. Expand **Interaction Presets** and choose a Numpad 1–9 slot.
-3. Apply the prepared settings, then select **Save Settings**.
+3. Assign an entry from the **Paired Animations** dropdown. Save Settings after changing a slot name or enabled state.
 4. Turn on **Num Lock**, return to gameplay, and press the assigned numpad key.
 
-**Press the same key to stop; press another configured key to switch animations.** Prepare and apply the settings again after changing calibration.
+**Press the same key to stop or another configured key to switch.** Existing presets are migrated automatically with their hotkey assignments preserved.
 
-To use another character's calibrated preset on the selected partner, enable **Cross-Character Animation Reuse**. Different proportions cause placement offsets. Hotkeys use the saved partner when disabled, and the currently selected partner when enabled.
+Default names use the first five characters of the main animation, `x`, the first five of the partner animation, `x`, and the partner name. Use **Rename** on the right to change the name without affecting animations, parameters, or hotkeys.
+
+Expand **Paired Animations** above partner calibration to load both animations and their parameters. The selected partner is retained. Supported partners load their dedicated parameters for both characters; unsupported partners use the original parameters and can be calibrated and added as supported partners.
+
+To support another operator, keep the same two animations, change the partner, calibrate both characters, then press **Add Support for Current Partner**. The save-pair button is disabled for an existing pair. To revise a supported partner, recalibrate and click **Update Current Partner Parameters**. This saves both characters’ parameters for that partner. Other partners remain unchanged; assigned hotkeys use the updated parameters on their next playback.
+
+Each supported operator stores its own parameters for both characters:
+
+| Selected partner | Playback behavior |
+| --- | --- |
+| Has dedicated parameters | Uses those parameters regardless of the reuse switch |
+| Unsupported, reuse disabled | Uses the original saved partner and parameters |
+| Unsupported, reuse enabled | Uses the selected partner with the original parameters; proportions may cause offsets |
 
 ## Save Clips and Share
 
-Use the timeline to mark a start and end. Clips must be at least 0.2 seconds long.
+Mark a start and end on the timeline. Clips must be at least 0.2 seconds long.
 
 | Button | Purpose |
 | --- | --- |
 | Save Animation | Add the clip to the local animation list |
 | Save Clip As | Save animation JSON without adding it to the list |
-| Save Parameter Settings As | Prepare settings first, then save calibration JSON |
-| Load Parameter Settings JSON | Load settings into the selected hotkey slot |
 
-Load animation JSON through **Animation Import → Import Partner JSON**. Load parameter JSON in **Interaction Presets**. **Parameter files do not contain the animation.**
-
-To share a clip: save the clip as JSON → import that JSON → select and calibrate it → prepare settings → save parameter settings. Share both files so the parameters reference the correct animation.
+Load animation JSON through **Animation Import → Import Partner JSON**. Recipients can import a shared JSON, calibrate it, and save their own animation pair.
 
 ## Free Camera
 
@@ -119,7 +127,7 @@ Enable **Enable Partner Breast Physics** on the **Breast Physics** page.
 
 - **Automatically Apply to Partner** follows the selected partner.
 - **Automatically Apply to Controlled Character** follows the controlled character; only one automatic mode can be enabled.
-- Manual selection disables both automatic modes and targets a non-controlled squad member.
+- Manual selection disables both automatic modes and targets a non-controlled partner, including supported generated models.
 - Built-in presets are used without parameter controls. Only one character is affected; missing presets or bones are reported on the page.
 - Do not apply another breast physics module to the same character simultaneously.
 
@@ -133,9 +141,11 @@ Reload after restoring defaults or disabling the bridge too. Mesh changes are no
 
 ## Spawn Character
 
-Connect the game entry and enter a playable scene. In the rightmost **Spawn Character** tab, select an operator and press **Spawn** on the right. The model appears about 2 m ahead and becomes the selected interaction partner. Use **Remove Character** below to clear it. Selecting another operator and spawning replaces the existing model.
+In the rightmost **Spawn Character** tab, the whitelist groups female and male operators. All are enabled by default. Uncheck unwanted operators and press **Save Whitelist**; only checked operators appear in the spawn and partner selectors.
 
-Import or calibrate a partner animation, or play a hotkey preset. Enable **Cross-Character Animation Reuse** to use another character's saved preset. Generated models take precedence over same-name squad members. Removing a model stops its animation first. Changing the controlled character or losing the model triggers cleanup.
+Connect the game entry and enter a playable scene. Select an operator below and press **Spawn** on the right. The model appears about 2 m ahead and becomes the selected interaction partner. Use **Remove Character** below to clear it. Selecting another operator and spawning replaces the existing model.
+
+Import or calibrate a partner animation, or play a hotkey preset. Dedicated operator parameters take priority; enable **Cross-Character Animation Reuse** for an unsupported operator. Generated models take precedence over same-name squad members. Removing a model stops its animation first. Changing the controlled character or losing the model triggers cleanup.
 
 The menu lists currently known operators. Loading depends on resources available in your client; check the status and diagnostic log if it fails. Different skeletons or proportions may require reimporting or calibration. Spawning is local and does not unlock operators.
 
@@ -154,7 +164,7 @@ The menu lists currently known operators. Loading depends on resources available
 | Feet sink or hands miss contact | Support, placement, or proportions differ; pause and adjust support and the character root |
 | Numpad key does nothing | Num Lock is off, the slot is empty, or the character does not match; check the slot and character prompt |
 | Saved clip is missing from the list | Save Clip As does not add it; import that JSON or use Save Animation |
-| Loaded parameters show a missing animation | Settings do not contain motion; import the referenced animation JSON first |
+| Paired animation has a missing source | Import the referenced animation JSON first |
 | EFMI changes do not appear | The bridge has not been written/reloaded, or the mesh is unsupported |
 
 If the problem persists, provide EAI/EML versions, characters, animation filename, steps, and screenshots. Check EML logs or `Interaction.Diagnostics.log` beside the DLL.

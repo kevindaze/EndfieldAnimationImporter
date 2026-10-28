@@ -4,7 +4,7 @@
 
 [繁體中文](README.md) | English
 
-Version: 2.0.0 · Windows x64
+Version: 2.2.0 · Windows x64
 
 ## Before You Start
 
@@ -130,6 +130,14 @@ Install EFMI and the appearance mod separately.
 Choose EFMI's `Mods` folder or one mod folder → scan → adjust parameters/mesh → write the bridge → reload EFMI in-game. The reload key is usually F10; follow the panel's indication.
 
 Reload after restoring defaults or disabling the bridge too. Mesh changes are not applied live.
+
+## Spawn Character
+
+Connect the game entry and enter a playable scene. In the rightmost **Spawn Character** tab, select an operator and press **Spawn** on the right. The model appears about 2 m ahead and becomes the selected interaction partner. Use **Remove Character** below to clear it. Selecting another operator and spawning replaces the existing model.
+
+Import or calibrate a partner animation, or play a hotkey preset. Enable **Cross-Character Animation Reuse** to use another character's saved preset. Generated models take precedence over same-name squad members. Removing a model stops its animation first. Changing the controlled character or losing the model triggers cleanup.
+
+The menu lists currently known operators. Loading depends on resources available in your client; check the status and diagnostic log if it fails. Different skeletons or proportions may require reimporting or calibration. Spawning is local and does not unlock operators.
 
 ## Common Problems and Causes
 

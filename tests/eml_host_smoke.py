@@ -31,12 +31,17 @@ log=(work/'host.log').open('w',encoding='utf-8');host=subprocess.Popen([str(args
 try:
  status=wait(lambda: next((m for m in request('/status')['modules'] if m['id']==module and m['status']=='ready'),None))
  assert any(manifest['version'] in line for line in status['logs'])
- def reply(command,request_id):
-  assert request('/send',{'module_id':module,'request_id':request_id,'body':{'command':command}})['accepted']
+ def reply(command,request_id,**fields):
+  assert request('/send',{'module_id':module,'request_id':request_id,'body':{'command':command,**fields}})['accepted']
   return wait(lambda:next((m for m in request('/poll',{'module_id':module})['messages'] if m.get('request_id')==request_id),None))
  assert reply('workflow_get','workflow')['result']==0
  assert reply('presets_get','presets')['result']==0
  physics=reply('breast_physics_get','physics');assert physics['result']==0 and len(physics['body']['breast_physics']['characters'])==20
+ generated=reply('spawn_character_get','spawn');assert generated['result']==0 and generated['body']['spawn_character']['character']=='chr_0036_jsspsi' and not generated['body']['spawn_character']['spawned']
+ assert any(c['id']=='chr_0016_laevat' for c in generated['body']['spawn_character']['characters'])
+ assert reply('spawn_character_select','spawn-select',character='chr_0016_laevat')['body']['spawn_character']['character']=='chr_0016_laevat'
+ assert reply('spawn_character_select','spawn-invalid',character='../bad')['result']!=0
+ assert reply('spawn_character_create','spawn-offline')['result']!=0
  connection=reply('connect','connect');assert connection['result']==2 and 'runtime' in connection['body']['detail']
  print('PASS: EML loads packaged EAI '+manifest['version']+', initializes, dispatches native replies, and safely reports offline runtime unavailable')
 finally:

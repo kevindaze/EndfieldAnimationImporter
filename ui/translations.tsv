@@ -471,3 +471,34 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 找不到唯一的指定角色	No unique selected character found
 缺少胸腔方向骨架，無法套用物理	Chest orientation bones missing; physics disabled
 胸腔方向或骨架讀取失敗	Chest orientation or bone read failed
+
+遊戲角色資源尚未就緒	Game character resources are not ready
+祀的模型建立失敗	Failed to instantiate Si model
+請先進入可操作的遊戲場景	Enter a playable game scene first
+等待遊戲更新生成祀	Waiting for game update to spawn Si
+找不到祀的模型資源索引	Si model resource index not found
+祀已生成；請先移除再重新生成	Si already spawned; remove her before spawning again
+祀已生成（模型測試；尚未接入互動動畫）	Si spawned (visual test; interaction animations not connected yet)
+角色生成接口不可用，請查看日誌	Character spawning interfaces unavailable; check the log
+生成角色顯示失敗	Failed to display spawned character
+祀（模型生成測試）	Si (visual spawn test)
+生成角色已移除	Spawned character removed
+在主控前方 2 公尺生成；尚未接入互動動畫。	Spawns 2 m ahead; interaction animations are not connected yet.
+生成角色移除失敗，請重新進入場景	Failed to remove spawned character; re-enter the scene
+生成角色	Spawn Character
+尚未生成角色	No character spawned
+場景或主控已變更，生成角色已移除	Scene or controlled character changed; spawned character removed
+生成角色定位失敗	Failed to position spawned character
+祀的模型載入失敗；目前客戶端可能未包含此資源	Si model failed to load; this client may not contain the resource
+生成祀	Spawn Si
+移除角色	Remove Character
+生成後自動選為互動角色；同名角色優先使用生成模型。	Automatically selected as partner; generated models take precedence over same-name squad members.
+幹員模型載入失敗；目前客戶端可能未包含此資源	Operator model failed to load; this client may not contain the resource
+找不到所選幹員的模型資源索引	Selected operator model resource index not found
+幹員模型建立失敗	Failed to instantiate operator model
+選擇幹員：	Operator: 
+祀	Si
+生成	Spawn
+角色已生成；請先移除再重新生成	Character already spawned; remove it before spawning again
+已生成並選為互動角色：	Spawned and selected as partner: 
+請選擇有效幹員	Select a valid operator

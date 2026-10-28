@@ -37,3 +37,5 @@ const parameterRow=document.getElementById('presetSlots').children[0].children[4
 console.log('PASS: full bone lazy controls, live change flush before export, reset, four pages, free camera controls, external bridge controls, feedback, bone controls, prepared invalidation/export, per-slot JSON import, animation drag order/delete and preview');})().catch(e=>{console.error(e);process.exitCode=1});
 
 require('./breast_physics_ui_tests.cjs');
+
+require('./spawn_character_ui_tests.cjs');

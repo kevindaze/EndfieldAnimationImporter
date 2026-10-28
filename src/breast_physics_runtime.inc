@@ -14,7 +14,7 @@ bool BindBreast(const std::string& target){
  if(!p.value("enabled",true)){breast.status="原模組未啟用此角色的預設";return false;}
  auto pins=std::make_unique<Pins>();int count=0;auto manager=Squad(*pins,count);auto main=Call(Main);int matches=0;void* root=nullptr;void* entity=nullptr;void* model=nullptr;void* head=nullptr;void* shoulderL=nullptr;void* shoulderR=nullptr;PoseMath::Vector3 lever{0,-.04f,.1f};PoseMath::Quaternion chestReference{};bool chestReferenceReady=false;
  auto consider=[&](void* member){if(!member)return;auto m=pins->Keep(Call(Model,member));auto go=m?pins->Keep(Call(ModelGo,m)):nullptr;if(!Living(go)||Presets::Identity(ObjectName(go))!=target)return;root=pins->Keep(Call(GoTransform,go));entity=member;model=go;++matches;};
- if(breast.automaticMain)consider(pins->Keep(main));else for(int i=0;manager&&i<count;++i){void* args[]{&i};auto member=pins->Keep(Call(Member,manager,args));if(member!=main)consider(member);}
+ if(breast.automaticMain)consider(pins->Keep(main));else EachPartner(*pins,[&](void* member,void* go,int){if(Presets::Identity(ObjectName(go))!=target)return;root=pins->Keep(Call(GoTransform,go));entity=member;model=go;++matches;});
 
  if(matches!=1||!Living(root)){breast.status="找不到唯一的指定角色";return false;}
  auto find=[&](const std::string& name){int budget=1400;return BreastFind(root,name,*pins,budget);};
@@ -36,7 +36,7 @@ void PumpBreast(float dt){
  auto target=BreastTarget();
  if(breast.reset){ClearBreast();breast.scanned=0;breast.reset=false;}
  if(target.empty()){ClearBreast();breast.status="請選擇套用角色";return;}
- if(breast.root){Pins pins;bool found=false;auto main=Call(Main);if(breast.automaticMain){auto model=main==breast.entity?Call(Model,main):nullptr;found=model&&Call(ModelGo,model)==breast.model;}else{int count=0;auto manager=Squad(pins,count);for(int i=0;manager&&i<count;++i){void* args[]{&i};auto member=Call(Member,manager,args);if(member!=breast.entity||member==main)continue;auto model=Call(Model,member);found=model&&Call(ModelGo,model)==breast.model;}}if(!found||!Living(breast.root)||target!=breast.identity)ClearBreast();}
+ if(breast.root){Pins pins;bool found=false;auto main=Call(Main);if(breast.automaticMain){auto model=main==breast.entity?Call(Model,main):nullptr;found=model&&Call(ModelGo,model)==breast.model;}else{EachPartner(pins,[&](void* member,void* go,int){if(member==breast.entity&&go==breast.model)found=true;});}if(!found||!Living(breast.root)||target!=breast.identity)ClearBreast();}
 
  if(!breast.root){if(GetTickCount64()-breast.scanned<500)return;breast.scanned=GetTickCount64();if(!BindBreast(target))return;}
  auto context=BreastContext();

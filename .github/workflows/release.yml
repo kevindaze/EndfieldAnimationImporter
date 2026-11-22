@@ -29,6 +29,10 @@ jobs:
           node-version: '22'
       - name: Configure Windows x64
         run: cmake -S . -B build -A x64
+      - name: Configure bundled EML runtime
+        run: cmake -S third_party/eml/src/native -B eml-build -A x64
+      - name: Compile bundled EML runtime
+        run: cmake --build eml-build --config Release
       - name: Compile from source
         run: cmake --build build --config Release
       - name: Native regression tests
@@ -43,11 +47,13 @@ jobs:
           python tests/vmd_alias_tests.py
       - name: Package compiled runtime
         id: package
-        run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --output-dir "${{ runner.temp }}/eai-package"
+        run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --eml-runtime eml-build/Release --output-dir "${{ runner.temp }}/eai-package"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.filename }}
-          path: ${{ steps.package.outputs.archive }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.source_archive }}
           if-no-files-found: error
   release:
     needs: build
@@ -89,7 +95,7 @@ jobs:
           fi
           options=()
           if [[ "$PRERELEASE" == "true" ]]; then options+=(--prerelease); fi
-          gh release create "$tag" "package/$FILENAME" \
+          gh release create "$tag" "package/$FILENAME" "package/EndfieldAnimationImporter-${VERSION}-source.zip" \
             --target "$COMMIT" --title "EndfieldAnimationImporter $VERSION" \
-            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Requires EML; FBX conversion requires Blender." \
+            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Bundled EAI-only EML runtime. FBX conversion requires Blender." \
             "${options[@]}"

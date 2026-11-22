@@ -544,3 +544,18 @@ WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。	WASD: move
 配對動畫已重新命名	Paired animation renamed更新當前角色參數	Update Current Partner Parameters
 已更新當前角色的雙方參數	Updated both characters’ parameters for the current partner
 尚未建立配對動畫或來源不符	No matching animation pair exists
+EFMI 網格預覽（實驗）	EFMI Mesh Preview (Experimental)
+EFMI 網格設定檔路徑	EFMI mesh profile path
+列出角色 renderer 與骨骼	Log Character Renderers and Bones
+載入 EFMI 網格設定檔	Load EFMI Mesh Profile
+還原原始網格／取消預覽	Restore Original Mesh / Cancel Preview
+即時形變權重	Live Shape Weight
+已將 renderer 與骨骼名稱寫入日誌	Renderer and bone names written to the log
+模型還原失敗，請重啟遊戲	Mesh restoration failed. Restart the game.
+已結束 EFMI 網格預覽	EFMI mesh preview ended
+已載入 EFMI 網格預覽	EFMI mesh preview loaded
+套用 EFMI 形變失敗	Could not apply EFMI shape weight
+等待遊戲更新載入 EFMI 網格	Waiting for gameplay to load the EFMI mesh
+等待遊戲更新還原原始網格	Waiting for gameplay to restore the original mesh
+等待遊戲更新列出 renderer 與骨骼	Waiting for gameplay to list renderers and bones
+EFMI 形變權重無效	Invalid EFMI shape weight

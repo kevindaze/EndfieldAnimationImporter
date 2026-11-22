@@ -98,6 +98,22 @@ git push -u origin main
 
 ## EML compatibility checks
 
+The standalone package builds its EAI-only fork of the EML native runtime:
+
+```powershell
+cmake -S third_party/eml/src/native -B eml-build -A x64
+cmake --build eml-build --config Release
+cmake -S . -B build -A x64
+cmake --build build --config Release
+python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --eml-runtime eml-build/Release --output-dir ../artifacts
+```
+
+The runtime source and its upstream AGPL-3.0 license are in `third_party/eml`.
+EAI's launcher generates a private index with one enabled EAI entry. The fork
+rejects other module identities. The game host retains EML's runtime, hook,
+authenticated localhost messaging, official-parent launch and XInput support.
+The desktop entry is `EAI.Launcher.exe`; the loading components are in `runtime`.
+
 The normal CTest suite includes internal ownership and EML V1 connection-contract tests. To compile the connection test against an EML checkout, configure with `-DEAI_EML_SDK_DIR=<EML checkout>/include`.
 
 For a read-only packaged-DLL smoke test, build EML's `src/native` and run `python tests/eml_host_smoke.py --host <EModLoader.OfflineHost.exe> --zip <module ZIP> --work <temporary test directory>`. This checks native loading and communication; it does not validate live-game visuals. EAI retains its existing data paths.

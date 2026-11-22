@@ -16,10 +16,33 @@ target_link_libraries(interaction PRIVATE eai_dependencies user32 gdi32 comdlg32
 target_compile_options(interaction PRIVATE /W4)
 set_property(TARGET interaction PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set_target_properties(interaction PROPERTIES OUTPUT_NAME "Endfield.Interaction" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
+add_executable(eai_launcher WIN32 src/launcher.cpp)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/module.json" EAI_MANIFEST_JSON)
+string(JSON EAI_VERSION GET "${EAI_MANIFEST_JSON}" version)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS module.json)
+target_compile_definitions(eai_launcher PRIVATE "EAI_VERSION_W=L\"${EAI_VERSION}\"")
+target_link_libraries(eai_launcher PRIVATE eai_dependencies bcrypt comctl32 comdlg32 ole32 shell32 user32 ws2_32 gdi32)
+target_compile_options(eai_launcher PRIVATE /W4)
+set_target_properties(eai_launcher PROPERTIES
+  OUTPUT_NAME "EAI.Launcher"
+  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
+add_executable(eai_offline_host src/offline_host.cpp)
+target_link_libraries(eai_offline_host PRIVATE eai_dependencies interaction)
+target_compile_options(eai_offline_host PRIVATE /W4)
+set_target_properties(eai_offline_host PROPERTIES
+  OUTPUT_NAME "EAI.OfflineHost"
+  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
 add_executable(validate_animation tools/validate_animation.cpp)
+add_executable(efmi_setup_tests EXCLUDE_FROM_ALL src/efmi_setup_tests.cpp)
+target_link_libraries(efmi_setup_tests PRIVATE eai_dependencies)
+set_property(TARGET efmi_setup_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 target_link_libraries(validate_animation PRIVATE eai_dependencies)
 if(BUILD_TESTING)
-  foreach(test handshake_motion pose_math runtime_simulation follow_metadata external_models efmi_bridge external_mesh free_camera free_camera_input breast_physics language pose_ownership eml_connection)
+  foreach(test handshake_motion pose_math runtime_simulation follow_metadata external_models efmi_bridge external_mesh native_efmi_mesh free_camera free_camera_input breast_physics language pose_ownership eml_connection)
     add_executable(${test}_tests src/${test}_tests.cpp)
     target_link_libraries(${test}_tests PRIVATE eai_dependencies)
     if(test STREQUAL "handshake_motion")

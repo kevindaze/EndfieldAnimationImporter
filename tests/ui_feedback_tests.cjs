@@ -36,7 +36,24 @@ listener({kind:'reply',body:{animations:[{id:'warning',name:'warning',duration:2
 document.getElementById('previewAnimation').value='clip:warning';await document.getElementById('previewAnimation').onchange({target:document.getElementById('previewAnimation')});assert(!document.getElementById('partnerBindingWarning').hidden);
 listener({kind:'event',body:{type:'calibration_target_selected',target:'chr_0005_chen',target_name:'Chen'}});assert(document.getElementById('partnerBindingWarning').hidden);
 const pairedRow=document.getElementById('presetSlots').children[0].children[3];assert.equal(pairedRow.attributes['aria-label'],'已配對動畫');assert(!html.includes('>另存參數設定<'));
-console.log('PASS: full bone lazy controls, live change flush before export, reset, four pages, free camera controls, external bridge controls, feedback, bone controls, paired animation assignment, whitelist filtering, animation drag order/delete and preview');})().catch(e=>{console.error(e);process.exitCode=1});
+document.getElementById('nativeEfmiPath').value=' G:/Models/preview.json ';
+await click('nativeEfmiInspect');
+assert.equal(sent.at(-1).command,'native_efmi_inspect');
+await click('nativeEfmiLoad');
+assert.equal(sent.at(-1).command,'native_efmi_load');
+assert.equal(sent.at(-1).path,'G:/Models/preview.json');
+listener({kind:'event',body:{native_efmi:{shape:true,weight:0,detail:'已載入 EFMI 網格預覽'}}});
+assert(!document.getElementById('nativeEfmiShape').hidden);
+const shapeWeight=document.getElementById('nativeEfmiWeight');
+shapeWeight.value='65';
+shapeWeight.oninput();
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(sent.at(-1).command,'native_efmi_weight');
+assert.equal(sent.at(-1).weight,65);
+await click('nativeEfmiRestore');
+assert.equal(sent.at(-1).command,'native_efmi_restore');
+assert(document.getElementById('nativeEfmiShape').hidden);
+console.log('PASS: animation calibration, pair assignment, external bridge and native EFMI preview controls');})().catch(e=>{console.error(e);process.exitCode=1});
 
 require('./breast_physics_ui_tests.cjs');
 

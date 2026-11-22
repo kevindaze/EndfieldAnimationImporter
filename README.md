@@ -4,18 +4,25 @@
 
 繁體中文 | [English](README.en.md)
 
-適用版本：2.3.3｜Windows x64
+適用版本：3.0.0｜Windows x64
 
 ## 使用前準備
 
-- 安裝 EML；匯入 FBX／VMD 另需安裝 [Blender](https://www.blender.org/download/) 4.2 以上。
+- 解壓 EAI 套件；匯入 FBX／VMD 另需安裝 [Blender](https://www.blender.org/download/) 4.2 以上。
 - 主控使用男性或女性管理員；互動角色可從生成角色白名單中選擇，不在隊伍時會自動生成。
 - 停用其他第一人稱／相機模組，再啟動遊戲。
 
-1. 在 EML 匯入 EAI ZIP 並啟用，使用 EML「啟動遊戲」。更新模組後需重啟遊戲。
+1. 完整解壓 EAI ZIP，開啟 EAI.Launcher.exe 選擇遊戲後啟動。更新後需重啟遊戲。
 2. 進入可操作角色的場景，按 **Num0** 開啟面板。
 3. 在「模組設定 → 互動角色」按「連接遊戲入口」。
 4. 在互動角色下拉選單選擇幹員；不在隊伍中的角色會自動生成。
+
+### EAI 獨立啟動器
+
+將 ZIP 完整解壓到固定資料夾，開啟 `EAI.Launcher.exe`，選擇遊戲的 `Endfield.exe` 後按「啟動遊戲」。遊戲內宿主、載入元件、IL2CPP 介面、Hook 服務、訊息與日誌都包含在套件中，宿主固定啟用 EAI。進入可操作場景後按 Num0，手動連接遊戲入口。
+
+啟動器的深色側欄與標題列顯示名稱、版本號；下方日誌區會顯示啟動結果、launch.log 與 host.log；載入失敗時可從中查看階段與回傳碼。左側可開啟資料與日誌目錄。路徑會自動保存。如果以前已用 EML「安裝 DLL 自啟動」，先在 EML 卸載該自啟動，再使用獨立 EAI。啟動失敗會顯示載入元件回傳的原因，遊戲需要系統管理員權限時 Windows 會要求 UAC 確認。宿主日誌位於 `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.0.0/host.log`。原有設定與動畫仍在 `%LOCALAPPDATA%/BetterEndfield/Interaction`。
+
 
 ## 使用懶人包
 
@@ -139,6 +146,49 @@ VMD 直接選檔即可，不需 MMD 參考模型；只匯入動作。**不保證
 
 還原預設或停用橋接後，也需重載。網格調整不會即時套用。
 
+## EFMI 完整外型 Mod
+
+完整解壓 EAI ZIP 後，啟動器同層會有 `mod` 資料夾。每個 EFMI 外型 Mod 解壓到各自的子資料夾，保留原本的 INI、Meshes、Textures、Shader 與其他依賴的目錄結構。啟動器左側「開啟 mod 資料夾」可直接開啟此位置。
+
+```text
+EAI.Launcher.exe
+mod/
+  我的外型/
+    mod.ini
+    Meshes/
+    Textures/
+runtime/
+```
+
+按「啟動遊戲」時，有啟用的 INI 就會一併啟動內建 EFMI 1.4.8／XXMI 1.2.2，完整外型由 EFMI 的原生 INI 與渲染流程處理。外型需對應遊戲內已顯示的角色。模組所需的其他 Shader／插件也應放在 `mod` 內，角色身分、版本與相依套件要求依該 Mod 說明。
+
+啟動器顯示可掃描的 INI 數量。需要停用時關閉遊戲，把該 Mod 資料夾改名為 `DISABLED_原名稱`。遊戲中重載依 EFMI 的 F10 設定操作。同一角色的多個外型可能互相衝突，請依 Mod 的互斥要求管理。這份套件的 `mod` 初始為空。
+
+## EFMI 網格預覽（實驗）
+
+這個功能由 EAI 直接讀取 EFMI 的單一繪製段落，暫時替換指定角色一個 Unity renderer 的網格。先停用同一部位的 EFMI 外觀，進入可操作場景並連接遊戲入口。在「外部模型調整 → EFMI 網格預覽（實驗）」選「列出角色 renderer 與骨骼」，從 EML 日誌取出要測試的角色 ID、renderer 名稱和骨名。
+
+建立下列 JSON 並把示例資料換成自己的檔案及綁定。在遊戲面板選「載入 EFMI 網格設定檔」，或在 Web 面板輸入 JSON 完整路徑後按同一按鈕。
+
+```json
+{
+  "format": "eai-efmi-component",
+  "version": 1,
+  "ini": "path/to/mod.ini",
+  "actor": 0,
+  "character": "chr_0002_endminm",
+  "draw": "Component 0 / partName",
+  "renderer": "rendererName",
+  "bone": "boneName",
+  "preview_shape_scale": [1.05, 1.0, 1.0]
+}
+```
+
+- `ini` 可用絕對路徑，或填相對 JSON 的路徑。`actor` 為 0 代表主控，1 代表目前互動角色。`draw` 填現有 EFMI 掃描清單的原始繪製名稱，由 `; Draw Component N 名稱` 讀出。
+- 預覽使用既有單子網格 renderer 的材質與 bind pose，整個部件掛到指定的一根骨頭。支援檔案型 float3 位置與 16／32 位元索引。若已確認 EFMI 的 UV 為 float2，可加上 `"uv_resource": "Resource_Component0_VB1"` 與 `"uv_offset": 0` 指定資源名和位元組偏移。
+- `preview_shape_scale` 用於測試形變滑桿，三軸倍率可填 0.5～1.5。若模型有支援的單槽位置差量，可移除此欄並使用 `"packed_position_shape": true`，讀取位置檔旁的 `_merged_map.buf` 與 `_merged_packed_pos_delta.buf`。
+- 按「還原原始網格／取消預覽」後等待遊戲更新。預覽不保存設定。完整材質替換、多骨權重、LOD、INI 條件和外部效果仍由 EFMI 處理。
+
 ## 生成角色
 
 在最右側「生成角色」頁，上方白名單分為女性與男性，預設全選。取消不需要的幹員後，按「儲存白名單設定」；只有勾選者會出現在生成與互動角色選單。
@@ -170,6 +220,17 @@ VMD 直接選檔即可，不需 MMD 參考模型；只匯入動作。**不保證
 仍無法解決時，提供 EAI／EML 版本、使用角色、動畫檔名、操作步驟及畫面。日誌可在 EML 查看，或使用 DLL 旁的 `Interaction.Diagnostics.log`。
 
 備份設定與動畫庫：複製 `%LOCALAPPDATA%\BetterEndfield\Interaction` 整個資料夾。
+
+## EAI 離線宿主
+
+解壓 ZIP 後，在 PowerShell 執行下列指令，可檢查 EAI 自己的宿主、設定與命令回覆。宿主固定載入同一資料夾內的 EAI，設定放在指定目錄底下的 `EAI-Offline`。它適用於離線診斷，遊戲內功能仍由遊戲宿主提供。
+
+```powershell
+@('{"request_id":"workflow","body":{"command":"workflow_get"}}', 'stop') |
+  .\native\windows-x64\EAI.OfflineHost.exe --profile .\host-test
+```
+
+每行可送一筆 EAI JSON 命令。標準輸出回傳 JSON，診斷日誌寫到標準錯誤。
 
 ## 致謝
 

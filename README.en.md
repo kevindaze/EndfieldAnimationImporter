@@ -4,18 +4,25 @@
 
 [繁體中文](README.md) | English
 
-Version: 2.3.3 · Windows x64
+Version: 3.0.0 · Windows x64
 
 ## Before You Start
 
-- Install EML. Importing FBX/VMD also requires [Blender](https://www.blender.org/download/) 4.2 or later.
+- Extract the EAI package. Importing FBX/VMD also requires [Blender](https://www.blender.org/download/) 4.2 or later.
 - Control the male or female Endministrator. Partners can be selected from the whitelist and are spawned automatically when outside the squad.
 - Disable other first-person/camera modules before starting the game.
 
-1. Import the EAI ZIP in EML, enable it, and use **Launch Game**. Restart the game after updating the module.
+1. Extract the full EAI ZIP, open EAI.Launcher.exe, select the game, and launch it. Restart the game after updating.
 2. Enter a playable scene and press **Num0** to open the panel.
 3. Under **Module Settings → Partner**, select **Connect Game Entry**.
 4. Choose a partner from the whitelist dropdown. A model is spawned automatically if the operator is not in your squad.
+
+### EAI Standalone Launcher
+
+Extract the full ZIP to a stable folder, open `EAI.Launcher.exe`, select the game's `Endfield.exe`, and click Launch Game. The package includes the launcher, game host, IL2CPP interfaces, hook service, messaging, and logs. The host enables EAI automatically. In a playable scene, press Num0 and manually connect the game entry point.
+
+The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.0.0/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
+
 
 ## Quick Start
 
@@ -139,6 +146,49 @@ Choose EFMI's `Mods` folder or one mod folder → scan → adjust parameters/mes
 
 Reload after restoring defaults or disabling the bridge too. Mesh changes are not applied live.
 
+## Complete EFMI Appearance Mods
+
+Extract the full EAI ZIP. Its `mod` folder is beside `EAI.Launcher.exe`. Extract each EFMI appearance into its own subfolder, keeping its INI, Meshes, Textures, shaders, and dependencies in their original relative structure. The sidebar's **Open mod Folder** button opens this location.
+
+```text
+EAI.Launcher.exe
+mod/
+  MyAppearance/
+    mod.ini
+    Meshes/
+    Textures/
+runtime/
+```
+
+When enabled INI files are present, Launch Game also starts the bundled EFMI 1.4.8 / XXMI 1.2.2 loader. EFMI processes the complete appearance through its native INI and rendering pipeline. Show the matching character in the game. Include required shaders or plugins under `mod`, following the appearance author's character, version, and dependency requirements.
+
+The launcher displays the number of discoverable INI files. To disable an appearance, close the game and rename its directory to `DISABLED_originalName`. In-game reload follows EFMI's F10 configuration. Multiple appearances for one character can conflict. The released `mod` folder is initially empty.
+
+## EFMI Mesh Preview (Experimental)
+
+EAI can read one EFMI draw range and temporarily replace the mesh on a selected character's Unity renderer. Disable the EFMI override for the same part, enter a playable scene, and connect the game entry point. Under **External Model Adjustments → EFMI Mesh Preview (Experimental)**, click **Log Character Renderers and Bones** and copy the character ID, renderer name, and bone name from the EML log.
+
+Create the following JSON and replace the example values with your file and binding. Select it with **Load EFMI Mesh Profile** in the game panel, or enter its full path in the web panel and click the same button.
+
+```json
+{
+  "format": "eai-efmi-component",
+  "version": 1,
+  "ini": "path/to/mod.ini",
+  "actor": 0,
+  "character": "chr_0002_endminm",
+  "draw": "Component 0 / partName",
+  "renderer": "rendererName",
+  "bone": "boneName",
+  "preview_shape_scale": [1.05, 1.0, 1.0]
+}
+```
+
+- Use an absolute `ini` path or one relative to the JSON. Set `actor` to 0 for the controlled character or 1 for the current partner. Set `draw` to the original scan label derived from the `; Draw Component N name` comment.
+- The preview uses the material and bind pose of an existing single-submesh renderer and binds the whole part to one bone. It supports file-backed float3 positions and 16- or 32-bit indices. For a confirmed float2 UV stream, specify the resource name and byte offset with `"uv_resource": "Resource_Component0_VB1"` and `"uv_offset": 0`.
+- `preview_shape_scale` tests the slider with per-axis scale factors between 0.5 and 1.5. For a supported single-slot position shape, remove that option and set `"packed_position_shape": true` to read the `_merged_map.buf` and `_merged_packed_pos_delta.buf` files beside the position buffer.
+- Click **Restore Original Mesh / Cancel Preview** and let the game update. The preview does not save settings. Full material replacement, multi-bone weights, LODs, INI conditions, and external effects still use EFMI.
+
 ## Spawn Character
 
 In the rightmost **Spawn Character** tab, the whitelist groups female and male operators. All are enabled by default. Uncheck unwanted operators and press **Save Whitelist**; only checked operators appear in the spawn and partner selectors.
@@ -170,6 +220,17 @@ The menu lists currently known operators. Loading depends on resources available
 If the problem persists, provide EAI/EML versions, characters, animation filename, steps, and screenshots. Check EML logs or `Interaction.Diagnostics.log` beside the DLL.
 
 To back up settings and animations, copy the entire `%LOCALAPPDATA%\BetterEndfield\Interaction` folder.
+
+## EAI Offline Host
+
+After extracting the ZIP, run the following command in PowerShell to check the EAI host, profile, and command replies. The offline host loads EAI from the same folder and keeps its profile under `EAI-Offline` inside the directory you specify. In-game features use the game host.
+
+```powershell
+@('{"request_id":"workflow","body":{"command":"workflow_get"}}', 'stop') |
+  .\native\windows-x64\EAI.OfflineHost.exe --profile .\host-test
+```
+
+Send one EAI JSON command per line. The host writes JSON replies to standard output and diagnostics to standard error.
 
 ## Credits
 

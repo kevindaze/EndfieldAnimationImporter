@@ -1,0 +1,18 @@
+Endfield Model Importer 1.4.8 and XXMI Libraries 1.2.2
+EFMI https://github.com/SpectrumQT/EFMI-Package/tree/v1.4.8
+XXMI https://github.com/SpectrumQT/XXMI-Libs-Package/tree/v1.2.2
+
+Runtime libraries and core files imported from the user's local EFMI installation.
+EFMI and XXMI copyrights and GPL license texts are retained in this directory.
+The upstream manifests record the installed versions and original signatures.
+
+EAI configuration changes:
+- The permitted loader name is EModLoader.Launcher.exe.
+- The appearance include directory is ../../mod, relative to runtime/efmi.
+- Game launch is handled by EAI instead of an INI-embedded executable path.
+- The bundled startup guide uses EAI's mod-folder workflow.
+- Community promotion links are removed from the guide and update/error prompts.
+
+The EAI source archive includes upstream source tarballs in
+third_party/appearance-sources and the local configuration/core snapshot here.
+User appearance mods, persistent settings, logs and caches are supplied separately.

@@ -1,0 +1,12 @@
+Endfield Mod Loader native runtime and launcher
+Upstream https://github.com/Dr-hydra/Endfield-Mod-Loader
+Source imported from the user's local Endfield-Mod-Loader snapshot on 2026-11-22.
+Licensed under GNU Affero General Public License version 3.
+Copyright and third-party notices are retained in the source and license files.
+
+EAI modifications restrict module identity to local.endfield.interaction.
+The EAI launcher supplies a private one-module index and the bundled host.
+EAI additions support EFMI direct loading into the newly launched game PID,
+Direct3D 11 launch arguments, stage logging and resumed-game lifetime preservation.
+Corresponding source accompanies this release as EndfieldAnimationImporter-3.0.0-source.zip.
+The source includes build inputs, scripts and the imported upstream source.

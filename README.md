@@ -1,10 +1,10 @@
 # EndfieldAnimationImporter 使用手冊
 
-> **載入器：** 1.4.0（含）以前使用 [BEM 3.4.3](https://github.com/Dr-hydra/Better-Endfield)；1.5.0 起使用 [EML](https://github.com/Dr-hydra/Endfield-Mod-Loader)。
+> **獨立啟動：** 3.4.1 已內建遊戲宿主與 EFMI 外型載入器，無須另外安裝 EML 或 XXMI Launcher。完整解壓後執行 EAI.Launcher.exe，選擇遊戲即可啟動。
 
 繁體中文 | [English](README.en.md)
 
-適用版本：3.0.0｜Windows x64
+適用版本：3.4.1｜Windows x64
 
 ## 使用前準備
 
@@ -21,7 +21,7 @@
 
 將 ZIP 完整解壓到固定資料夾，開啟 `EAI.Launcher.exe`，選擇遊戲的 `Endfield.exe` 後按「啟動遊戲」。遊戲內宿主、載入元件、IL2CPP 介面、Hook 服務、訊息與日誌都包含在套件中，宿主固定啟用 EAI。進入可操作場景後按 Num0，手動連接遊戲入口。
 
-啟動器的深色側欄與標題列顯示名稱、版本號；下方日誌區會顯示啟動結果、launch.log 與 host.log；載入失敗時可從中查看階段與回傳碼。左側可開啟資料與日誌目錄。路徑會自動保存。如果以前已用 EML「安裝 DLL 自啟動」，先在 EML 卸載該自啟動，再使用獨立 EAI。啟動失敗會顯示載入元件回傳的原因，遊戲需要系統管理員權限時 Windows 會要求 UAC 確認。宿主日誌位於 `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.0.0/host.log`。原有設定與動畫仍在 `%LOCALAPPDATA%/BetterEndfield/Interaction`。
+啟動器的深色側欄與標題列顯示名稱、版本號；下方日誌區會顯示啟動結果、launch.log 與 host.log；載入失敗時可從中查看階段與回傳碼。左側可開啟資料與日誌目錄。遊戲路徑會自動保存。套件資料夾可以改名或搬移，下次啟動會為目前位置建立宿主索引。如果以前已用 EML「安裝 DLL 自啟動」，先在 EML 卸載該自啟動，再使用獨立 EAI。啟動失敗會顯示載入元件回傳的原因，遊戲需要系統管理員權限時 Windows 會要求 UAC 確認。宿主日誌位於 `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.4.1/<套件路徑雜湊>/host.log`。原有設定與動畫仍在 `%LOCALAPPDATA%/BetterEndfield/Interaction`。
 
 
 ## 使用懶人包
@@ -140,11 +140,19 @@ VMD 直接選檔即可，不需 MMD 參考模型；只匯入動作。**不保證
 
 ## EFMI 外部模型調整
 
-需另外安裝 EFMI 與外觀模組。
+1. 透過 EAI 啟動器載入外型。在 Num0 或網頁面板開啟「外部模型調整」，EAI 會掃描啟動器旁的 `mod`。外型增減後按「重新掃描」。
+2. 展開「外部模型調整 → 網格變形」，直接拖曳支援部件的大小、角度、位移或支點滑桿。可隨時切換部件。內建 EFMI 即時更新並自動保存網格調整。
+3. 要還原某個部件，按「還原此網格」。要停用掃描範圍內的全部網格調整，按「停用橋接」。
 
-選擇 EFMI `Mods` 或單一模組資料夾 → 掃描模組 → 調整參數／網格 → 寫入橋接 → 回遊戲按 EFMI 重載鍵（通常為 F10，以面板顯示為準）。
+「可用參數」中已由內建 EFMI 載入的原生 INI 變數，拖動滑條時會在遊戲中即時預覽。用「寫入橋接」保存橋接設定。某項參數未能即時生效，或停用了已載入的舊橋接時，才需回遊戲按 F10 重載。
 
-還原預設或停用橋接後，也需重載。網格調整不會即時套用。
+### 嘴部吸附（實驗）
+
+在 Num0 或網頁的「外部模型調整」勾選「嘴部吸附」。每次啟動預設關閉。使用男管理員及含 `Component 9 / dih` 或 `Component 9 / weap` 的 EFMI 外型，連接遊戲入口並播放配對動畫。
+
+DIH 從正面靠近嘴部時，整個部件會繞根部旋轉，末端沿固定長度的弧線對準嘴口。DIH 網格接觸唇口碰撞盒後，依垂直於 DIH 軸線的截面厚度與目前開口補足張開量，可由張嘴形變或下顎轉動呈現。旋轉對準沿用動畫當前的進入深度。這項功能根據 MMD 播放後的姿勢執行。
+
+在同一面板也可選「小穴吸附」、「左手吸附」或「右手吸附」。四種吸附一次只能選一種，重啟後預設關閉。新模式會用互動角色的骨架估算接觸點。小穴吸附在根部距骨盆定位點不超過 DIH 長度的 1.3 倍時持續轉向定位點，部件維持原長。手部吸附會讓末端轉向手掌接觸點。離開可達範圍後逐步回到原本角度。
 
 ## EFMI 完整外型 Mod
 
@@ -164,31 +172,6 @@ runtime/
 
 啟動器顯示可掃描的 INI 數量。需要停用時關閉遊戲，把該 Mod 資料夾改名為 `DISABLED_原名稱`。遊戲中重載依 EFMI 的 F10 設定操作。同一角色的多個外型可能互相衝突，請依 Mod 的互斥要求管理。這份套件的 `mod` 初始為空。
 
-## EFMI 網格預覽（實驗）
-
-這個功能由 EAI 直接讀取 EFMI 的單一繪製段落，暫時替換指定角色一個 Unity renderer 的網格。先停用同一部位的 EFMI 外觀，進入可操作場景並連接遊戲入口。在「外部模型調整 → EFMI 網格預覽（實驗）」選「列出角色 renderer 與骨骼」，從 EML 日誌取出要測試的角色 ID、renderer 名稱和骨名。
-
-建立下列 JSON 並把示例資料換成自己的檔案及綁定。在遊戲面板選「載入 EFMI 網格設定檔」，或在 Web 面板輸入 JSON 完整路徑後按同一按鈕。
-
-```json
-{
-  "format": "eai-efmi-component",
-  "version": 1,
-  "ini": "path/to/mod.ini",
-  "actor": 0,
-  "character": "chr_0002_endminm",
-  "draw": "Component 0 / partName",
-  "renderer": "rendererName",
-  "bone": "boneName",
-  "preview_shape_scale": [1.05, 1.0, 1.0]
-}
-```
-
-- `ini` 可用絕對路徑，或填相對 JSON 的路徑。`actor` 為 0 代表主控，1 代表目前互動角色。`draw` 填現有 EFMI 掃描清單的原始繪製名稱，由 `; Draw Component N 名稱` 讀出。
-- 預覽使用既有單子網格 renderer 的材質與 bind pose，整個部件掛到指定的一根骨頭。支援檔案型 float3 位置與 16／32 位元索引。若已確認 EFMI 的 UV 為 float2，可加上 `"uv_resource": "Resource_Component0_VB1"` 與 `"uv_offset": 0` 指定資源名和位元組偏移。
-- `preview_shape_scale` 用於測試形變滑桿，三軸倍率可填 0.5～1.5。若模型有支援的單槽位置差量，可移除此欄並使用 `"packed_position_shape": true`，讀取位置檔旁的 `_merged_map.buf` 與 `_merged_packed_pos_delta.buf`。
-- 按「還原原始網格／取消預覽」後等待遊戲更新。預覽不保存設定。完整材質替換、多骨權重、LOD、INI 條件和外部效果仍由 EFMI 處理。
-
 ## 生成角色
 
 在最右側「生成角色」頁，上方白名單分為女性與男性，預設全選。取消不需要的幹員後，按「儲存白名單設定」；只有勾選者會出現在生成與互動角色選單。
@@ -203,7 +186,7 @@ runtime/
 
 | 問題 | 原因與處理方式 |
 | --- | --- |
-| 面板未出現 | 確認 EAI 已在 EML 啟用，並由 EML 啟動遊戲；更新後需重啟 |
+| 面板未出現 | 完整解壓套件，使用 EAI.Launcher.exe 啟動遊戲；進入可操作場景按 Num0。更新後需重啟遊戲 |
 | 無法連接入口 | 遊戲尚未就緒、其他相機模組佔用入口，或版本不相容；進入場景後重試，停用其他相機模組並重啟 |
 | 找不到 Blender | 未找到安裝位置；手動選擇含 `blender.exe` 的資料夾 |
 | 匯入要求停止動畫 | 角色正在播放或校準；先按「停止動畫」 |
@@ -217,7 +200,7 @@ runtime/
 | 配對動畫顯示來源缺失 | 先導入它引用的動畫 JSON |
 | EFMI 調整沒有變化 | 尚未寫入橋接或重載，或該網格不支援調整 |
 
-仍無法解決時，提供 EAI／EML 版本、使用角色、動畫檔名、操作步驟及畫面。日誌可在 EML 查看，或使用 DLL 旁的 `Interaction.Diagnostics.log`。
+仍無法解決時，提供 EAI 版本、使用角色、動畫檔名、操作步驟及畫面。從啟動器左側「開啟日誌目錄」取得 `launch.log`、`host.log`；原生日誌位於 `native/windows-x64/Interaction.Diagnostics.log`。
 
 備份設定與動畫庫：複製 `%LOCALAPPDATA%\BetterEndfield\Interaction` 整個資料夾。
 

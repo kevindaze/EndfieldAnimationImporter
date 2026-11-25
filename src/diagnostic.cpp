@@ -2,12 +2,13 @@
 #include "external_models.h"
 #include "efmi_bridge.h"
 #include "external_mesh.h"
-#include "native_efmi_mesh.h"
+#include "live_external_mesh.h"
 #include <optional>
 
 #include <BetterEndfield/ThirdPartyModule.h>
 #include "pose_ownership.h"
 #include "pose_math.h"
+#include "mouth_contact.h"
 #include "handshake_motion.h"
 #include "grip_settings.h"
 #include "preset_settings.h"
@@ -60,7 +61,9 @@ bool armed=false,keyDown=false,poseContracts=false;
 enum class Mode {HeadTest,LookAt,Mutual,Standing,Handshake,Custom};
 Handshake::Clip handshakeA,handshakeB;
 std::filesystem::path moduleFolder;
-std::string externalFolder="G:/Project/endfield-mod/EFMI/EFMI/Mods";EfmiBridge::Scan efmiScan;
+EfmiBridge::Scan efmiScan;
+// Shutdown releases the worker explicitly. Avoid joining it under the DLL loader lock.
+ExternalMesh::LiveBuffers* liveExternalMesh=nullptr;
 std::vector<ExternalModels::Part> externalParts;Presets::Json externalCatalog=Presets::Json::array();
 std::map<std::string,std::shared_ptr<ImportedAnimation::Clip>> animationLibrary;
 std::string supportTarget="none";std::string selectedControlledClip,controlledPose="inherit",controlledSupport="none";bool controlledLoop=false;std::string selectedClip,lastExportPath,lastSkeletonReferencePath;Bones::Settings boneTarget;bool sceneAuditPending=false;PoseMath::Vector3 sceneBefore{};uint64_t sceneRevision=0,sceneAuditUntil=0,sceneAuditLast=0;Presets::Json sceneBeforeActors;bool pendingTimeline=false;std::optional<float> pendingSeek,pendingMainSeek;bool pendingMainStop=false,pendingPartnerStop=false;bool bonesPending=false;struct BoneInfo{std::string key,name,group;int actor=0,depth=0;};std::vector<BoneInfo> boneCatalog;uint64_t boneGeneration=0;
@@ -133,24 +136,12 @@ Method methods[]{
  {{core,"UnityEngine","Object","FindObjectsOfType","System.Type","UnityEngine.Object[]",1}},
  {{core,"UnityEngine","Behaviour","get_enabled",nullptr,"System.Boolean",0}},
  {{core,"UnityEngine","Behaviour","set_enabled","System.Boolean","System.Void",1}},
- {{core,"UnityEngine","SkinnedMeshRenderer","set_sharedMesh","UnityEngine.Mesh","System.Void",1}},
- {{core,"UnityEngine","Mesh",".ctor",nullptr,"System.Void",0}},
- {{core,"UnityEngine","Mesh","set_vertices","UnityEngine.Vector3[]","System.Void",1}},
- {{core,"UnityEngine","Mesh","set_triangles","System.Int32[]","System.Void",1}},
- {{core,"UnityEngine","Mesh","set_bindposes","UnityEngine.Matrix4x4[]","System.Void",1}},
- {{core,"UnityEngine","Mesh","set_boneWeights","UnityEngine.BoneWeight[]","System.Void",1}},
- {{core,"UnityEngine","Mesh","RecalculateNormals",nullptr,"System.Void",0}},
- {{core,"UnityEngine","Mesh","RecalculateBounds",nullptr,"System.Void",0}},
- {{core,"UnityEngine","Mesh","get_subMeshCount",nullptr,"System.Int32",0}},
- {{core,"UnityEngine","Object","Destroy","UnityEngine.Object","System.Void",1}},
  {{core,"UnityEngine","Mesh","get_blendShapeCount",nullptr,"System.Int32",0}},
+ {{core,"UnityEngine","Mesh","GetBlendShapeName","System.Int32","System.String",1}},
  {{core,"UnityEngine","SkinnedMeshRenderer","GetBlendShapeWeight","System.Int32","System.Single",1}},
  {{core,"UnityEngine","SkinnedMeshRenderer","SetBlendShapeWeight","System.Int32|System.Single","System.Void",2}},
- {{core,"UnityEngine","Mesh","AddBlendShapeFrame","System.String|System.Single|UnityEngine.Vector3[]|UnityEngine.Vector3[]|UnityEngine.Vector3[]","System.Void",5}},
- {{core,"UnityEngine","Mesh","set_uv","UnityEngine.Vector2[]","System.Void",1}},
 };
-enum Key {Tail,Main,Model,ModelGo,Name,GoTransform,ComponentTransform,Components,Length,Item,ChildCount,Child,Player,SlotCount,Member,Loading,Scene,SceneName,Alive,Parent,LocalRotation,SetLocalRotation,Position,WorldRotation,SetPosition,SetWorldRotation,LocalPosition,SetLocalPosition,EntityValid,Movement,Moving,Airborne,MoveMode,CharacterController,LocalScale,SetLocalScale,SharedMesh,MeshBones,BindPoses,LocalToWorld,WorldToLocal,CameraMain,InputRootGroup,InputGroupEnabled,InputToggleAll,FindCanvases,UiEnabled,SetUiEnabled,
- SetSharedMesh,MeshConstructor,MeshSetVertices,MeshSetTriangles,MeshSetBindPoses,MeshSetBoneWeights,MeshRecalculateNormals,MeshRecalculateBounds,MeshSubMeshCount,DestroyNativeMesh,MeshBlendCount,GetBlendWeight,SetBlendWeight,MeshAddBlendFrame,MeshSetUv};
+enum Key {Tail,Main,Model,ModelGo,Name,GoTransform,ComponentTransform,Components,Length,Item,ChildCount,Child,Player,SlotCount,Member,Loading,Scene,SceneName,Alive,Parent,LocalRotation,SetLocalRotation,Position,WorldRotation,SetPosition,SetWorldRotation,LocalPosition,SetLocalPosition,EntityValid,Movement,Moving,Airborne,MoveMode,CharacterController,LocalScale,SetLocalScale,SharedMesh,MeshBones,BindPoses,LocalToWorld,WorldToLocal,CameraMain,InputRootGroup,InputGroupEnabled,InputToggleAll,FindCanvases,UiEnabled,SetUiEnabled,MeshBlendCount,MeshBlendName,GetBlendWeight,SetBlendWeight};
 BE_ResolvedClassV1 animator{},skinnedRenderer{},uiCanvas{};
 BE_ResolvedFieldV1 squad{};
 void Log(const std::string& s){if(host&&host->log)host->log(host->context,s.c_str());if(output){output<<s<<'\n';output.flush();}}
@@ -825,7 +816,7 @@ void FollowReport(){
  Log("=== FOLLOW RESEARCH COMPLETE; no AI/movement changes ===");Event("follow_research_complete");
 }
 #include "fbx_import.inc"
-#include "native_efmi_runtime.inc"
+#include "mouth_contact_runtime.inc"
 void __fastcall Detour(void* instance,float dt,void* method){
  if(next)next(instance,dt,method);
  if(!active.load())return;
@@ -841,11 +832,12 @@ void __fastcall Detour(void* instance,float dt,void* method){
  PumpSpawnCharacter();
  PumpFreeCamera(dt);
  RemoveBreastLayer();
+ RemoveMouthLayer();
  PumpPose(dt);
- PumpNativeEfmi();
  PumpBreast(dt);
+ PumpMouth(dt);
  if(pairedUiPending&&host&&host->emit){pairedUiPending=false;auto update=Presets::Json{{"partner_status",panelStatus},{"paired",PairedState()},{"operator_roster",OperatorState()},{"workflow",Workflow::EntryJson(workflow.draft)},{"preset_bank",presetBank.Encode()}}.dump();host->emit(host->context,update.c_str());}
- static ULONGLONG lastTimeline=0;if(GetTickCount64()-lastTimeline>=150){lastTimeline=GetTickCount64();auto payload=Presets::Json{{"type","timeline"},{"native_efmi",NativeEfmiState()},{"free_camera",FreeCameraJson()},{"spawn_character",SpawnCharacterJson()},{"breast_physics",BreastJson()},{"timeline",TimelineJson()},{"controlled_timeline",TimelineJson(true)}}.dump();if(host&&host->emit)host->emit(host->context,payload.c_str());}
+ static ULONGLONG lastTimeline=0;if(GetTickCount64()-lastTimeline>=150){lastTimeline=GetTickCount64();auto payload=Presets::Json{{"type","timeline"},{"mouth_contact",AttachmentState()},{"free_camera",FreeCameraJson()},{"spawn_character",SpawnCharacterJson()},{"breast_physics",BreastJson()},{"timeline",TimelineJson()},{"controlled_timeline",TimelineJson(true)}}.dump();if(host&&host->emit)host->emit(host->context,payload.c_str());}
  if(targetsPending.exchange(false))Targets();if(bonesPending){bonesPending=false;ScanBoneCatalog();}PumpFbxImport();
  if(movementPending.exchange(false))MovementReport();
  if(followPending.exchange(false))FollowReport();
@@ -898,12 +890,13 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
   if(!offline)output.open(moduleFolder/"Interaction.Diagnostics.log",std::ios::app);
  }
  currentUiSettings=false;panelBaseline="{}";if(configuration){try{auto c=Presets::Json::parse(configuration);panelBaseline=c.dump();currentUiSettings=c.value("ui_schema",0)>=16;if(c.contains("preset_bank"))presetBank.Read(c["preset_bank"]);}catch(...){}}
- pairedAnimations={};operatorWhitelist={};pairStorageInvalid=false;pairedUiPending=true;pendingRoleSelection.clear();partnerAnimationReuse=false;lastControlled.clear();selectedControlledClip.clear();controlledPose="inherit";controlledSupport="none";controlledLoop=false;animationImportFolders={};blenderFolder.clear();supportTarget="none";armedMode=Mode::HeadTest;calibrationMode=false;calibrationLoop=false;gripTarget=Grip::Settings{};if(configuration){ReadSavedGrip(configuration);try{auto c=Presets::Json::parse(configuration);blenderFolder=c.value("blender_folder",std::string{});if(c.contains("bone_offsets"))boneTarget.Read(c["bone_offsets"]);if(c.contains("support_mode")&&Support::Valid(Support::Normalize(c["support_mode"])))supportTarget=Support::Normalize(c["support_mode"]);}catch(...){}}LoadPanelSettings();presetBank.enabled=true;LoadAnimationLibrary();LoadAnimationOrder();auto loadedBones=boneTarget;workflow=Workflow::State{};workflow.draft.controlledPose=controlledPose;workflow.draft.controlledAnimation=selectedControlledClip;workflow.draft.controlledSupport=controlledSupport;fbxManagerAction=controlledPose;selectedControlledClip.clear();mainTimelineDraft={};pendingMainSeek.reset();pendingMainStop=pendingPartnerStop=false;workflow.draft.support=supportTarget;workflow.draft.bones=loadedBones;workflow.draft.grip=gripTarget;boneTarget=workflow.draft.bones;boneCatalog.clear();bonesPending=false;pendingPreview=false;pendingPreviewPaused=false;pendingSelectionStop=false;timelineDraft={};gripCurrent=gripTarget;MigratePairedSettings();
+ pairedAnimations={};operatorWhitelist={};pairStorageInvalid=false;pairedUiPending=true;pendingRoleSelection.clear();partnerAnimationReuse=false;lastControlled.clear();selectedControlledClip.clear();controlledPose="inherit";controlledSupport="none";controlledLoop=false;animationImportFolders={};blenderFolder.clear();supportTarget="none";armedMode=Mode::HeadTest;calibrationMode=false;calibrationLoop=false;gripTarget=Grip::Settings{};if(configuration){ReadSavedGrip(configuration);try{auto c=Presets::Json::parse(configuration);blenderFolder=c.value("blender_folder",std::string{});if(c.contains("bone_offsets"))boneTarget.Read(c["bone_offsets"]);if(c.contains("support_mode")&&Support::Valid(Support::Normalize(c["support_mode"])))supportTarget=Support::Normalize(c["support_mode"]);}catch(...){}}efmiScan={};mouthContact=MouthRuntime{};LoadPanelSettings();
+ presetBank.enabled=true;LoadAnimationLibrary();LoadAnimationOrder();auto loadedBones=boneTarget;workflow=Workflow::State{};workflow.draft.controlledPose=controlledPose;workflow.draft.controlledAnimation=selectedControlledClip;workflow.draft.controlledSupport=controlledSupport;fbxManagerAction=controlledPose;selectedControlledClip.clear();mainTimelineDraft={};pendingMainSeek.reset();pendingMainStop=pendingPartnerStop=false;workflow.draft.support=supportTarget;workflow.draft.bones=loadedBones;workflow.draft.grip=gripTarget;boneTarget=workflow.draft.bones;boneCatalog.clear();bonesPending=false;pendingPreview=false;pendingPreviewPaused=false;pendingSelectionStop=false;timelineDraft={};gripCurrent=gripTarget;MigratePairedSettings();
  movementPending=false;followPending=false;
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 3.0.0 initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 3.4.1 initialized; follow research is read-only; verified preview modes retained");
  if(!offline){
   FreeCameraInput::Start();
   if(!InteractionPanel::Start(PanelRead,PanelExecute))Log("Interaction overlay unavailable; use module web UI");
@@ -912,26 +905,212 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  return BE_Result_Ok;
 }
 BE_Result BE_CALL Configure(const char* configuration){std::lock_guard lock(gate);if(!configuration)return BE_Result_InvalidArgument;try{auto c=Presets::Json::parse(configuration);auto support=Support::Normalize(c.value("support_mode",supportTarget));if(!Support::Valid(support))return BE_Result_InvalidArgument;partnerAnimationReuse=c.value("partner_animation_reuse",partnerAnimationReuse);auto nextBank=presetBank;if(c.contains("preset_bank")&&!nextBank.Read(c["preset_bank"]))return BE_Result_InvalidArgument;auto previousGrip=gripTarget.Encode();ReadSavedGrip(configuration);if(c.contains("bone_offsets")){Bones::Settings candidate;if(!candidate.Read(c["bone_offsets"]))return BE_Result_InvalidArgument;if(candidate.Encode()!=boneTarget.Encode())workflow.Invalidate();boneTarget=candidate;workflow.draft.bones=boneTarget;}if(previousGrip!=gripTarget.Encode()){workflow.Invalidate();workflow.draft.grip=gripTarget;}if(supportTarget!=support)workflow.Invalidate();supportTarget=workflow.draft.support=support;blenderFolder=c.value("blender_folder",blenderFolder);nextBank.enabled=true;presetBank=nextBank;panelBaseline=c.dump();presetKeys.fill(true);SavePanelSettings();return BE_Result_Ok;}catch(...){return BE_Result_InvalidArgument;}}
-Presets::Json EfmiCatalog(){auto mods=Presets::Json::array();int index=0,meshIndex=0;for(auto& m:efmiScan.mods){auto controls=Presets::Json::array(),meshes=Presets::Json::array();for(auto& c:m.controls){controls.push_back({{"index",index++},{"key",EfmiBridge::Utf8(m.file)+"|"+c.binding},{"name",c.name},{"binding",c.binding},{"min",c.low},{"max",c.high},{"value",c.value},{"integer",c.integer},{"dirty",c.dirty}});}for(auto& mesh:m.meshes)meshes.push_back({{"index",meshIndex++},{"key",EfmiBridge::Utf8(m.file)+"|"+mesh.name},{"name",EfmiBridge::MeshLabel(mesh.name)},{"condition",mesh.condition},{"resource",mesh.resource},{"supported",mesh.supported},{"reason",mesh.reason},{"values",mesh.values},{"dirty",mesh.dirty}});mods.push_back({{"name",m.name},{"file",EfmiBridge::Utf8(m.file)},{"namespace",m.space},{"controls",controls},{"meshes",meshes}});}return {{"folder",externalFolder},{"reload_key",efmiScan.reloadKey},{"bridge_available",!efmiScan.efmiRoot.empty()},{"mods",mods},{"errors",efmiScan.errors}};}
-void ScanExternalFolder(const std::string& path){auto scanned=EfmiBridge::Discover(std::filesystem::path(std::u8string(path.begin(),path.end())));efmiScan=std::move(scanned);for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes)ExternalMesh::Probe(mod,mesh);externalFolder=EfmiBridge::Utf8(efmiScan.folder);std::vector<std::string> profileErrors;auto labels=ExternalModels::Load({moduleFolder/"../../external-models",PanelSettingsPath().parent_path()/"ExternalModels"},profileErrors);for(auto& m:efmiScan.mods)for(auto& c:m.controls){std::set<std::string> affected;for(auto& mesh:m.meshes)if(EfmiBridge::Uses(mesh.condition,c.binding))affected.insert(EfmiBridge::MeshLabel(mesh.name));c.name=affected.empty()?c.binding:*affected.begin()+(affected.size()>1?" 等 "+std::to_string(affected.size())+" 項":"");for(auto& p:labels)if(std::filesystem::path(std::u8string(p.source.begin(),p.source.end())).lexically_normal()==m.file.lexically_normal())for(auto& q:p.parameters)if(EfmiBridge::Lower(q.binding)==EfmiBridge::Lower(c.binding))c.name=q.name;}
- // Restore the bridge's overrides as editable pending values; source defaults stay untouched.
- auto pathOut=efmiScan.efmiRoot.empty()?std::filesystem::path{}:EfmiBridge::OutputPath(efmiScan);if(!pathOut.empty()&&std::filesystem::exists(pathOut)){EfmiBridge::Owned(pathOut);std::istringstream in(EfmiBridge::ReadFile(pathOut));std::string line;while(std::getline(in,line))for(auto& m:efmiScan.mods)for(auto& c:m.controls){auto prefix="post $\\"+m.space+"\\"+c.binding.substr(1)+" = ";if(line.starts_with(prefix)){try{auto value=std::stof(line.substr(prefix.size()));if(std::isfinite(value)&&value>=c.low&&value<=c.high){c.value=value;c.dirty=true;}}catch(...){}}}}
- for(auto& part:externalCatalog)if(part.value("backend",std::string{})=="efmi_shapekey")part["status"]="請在外部模型調整掃描來源資料夾，使用 INI 重載橋接";
- auto settingsPath=efmiScan.folder/"BEM.GeneratedMeshes"/"settings.json";if(std::filesystem::exists(settingsPath)){try{auto saved=Presets::Json::parse(EfmiBridge::ReadFile(settingsPath));if(saved.value("format",std::string{})=="bem-external-mesh-settings")for(auto& m:efmiScan.mods)for(auto& mesh:m.meshes){auto key=EfmiBridge::Utf8(m.file)+"|"+mesh.name;if(mesh.supported&&saved.at("values").contains(key)){auto values=saved["values"][key].get<std::array<float,12>>();if(ExternalMesh::Valid(values)){mesh.values=values;mesh.dirty=true;}}}}catch(...){Log("External mesh settings invalid; retain scan defaults");}}
- panelStatus="外部模型已掃描："+std::to_string(efmiScan.mods.size())+" 個 INI；可見狀態尚未驗證";SavePanelSettings();}
-bool SetExternalValue(int index,const std::string& key,float value){for(auto& m:efmiScan.mods)for(auto& c:m.controls){if(index--!=0)continue;if(key!=EfmiBridge::Utf8(m.file)+"|"+c.binding||!std::isfinite(value)||value<c.low||value>c.high||(c.integer&&std::floor(value)!=value))return false;c.value=value;c.dirty=true;panelStatus="參數待寫入；寫入橋接後回遊戲重載 EFMI";return true;}return false;}
-bool SetExternalMeshValue(int index,const std::string& key,int field,float value,bool linked){if(field<0||field>=12||!std::isfinite(value))return false;for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes){if(index--!=0)continue;if(key!=EfmiBridge::Utf8(mod.file)+"|"+mesh.name||!mesh.supported)return false;auto next=mesh.values;next[field]=value;if(!ExternalMesh::Valid(next))return false;auto label=EfmiBridge::MeshLabel(mesh.name);for(auto& other:mod.meshes)if(&other==&mesh||(linked&&EfmiBridge::MeshLabel(other.name)==label)){if(!other.supported)return false;}for(auto& other:mod.meshes)if(&other==&mesh||(linked&&EfmiBridge::MeshLabel(other.name)==label)){other.values[field]=value;other.dirty=true;}panelStatus="網格調整待寫入；回遊戲重載 EFMI 套用";return true;}return false;}
-bool ResetExternalMesh(int index,const std::string& key){for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes){if(index--!=0)continue;if(key!=EfmiBridge::Utf8(mod.file)+"|"+mesh.name||!mesh.supported)return false;auto label=EfmiBridge::MeshLabel(mesh.name);for(auto& other:mod.meshes)if(EfmiBridge::MeshLabel(other.name)==label){other.values={0,0,0,0,0,0,1,1,1,0,0,0};ExternalMesh::Probe(mod,other);other.dirty=true;}panelStatus="網格已還原預設，寫入橋接並重載後套用";return true;}return false;}
+Presets::Json EfmiCatalog(){auto mods=Presets::Json::array();int index=0,meshIndex=0;for(auto& m:efmiScan.mods){auto controls=Presets::Json::array(),meshes=Presets::Json::array();for(auto& c:m.controls){controls.push_back({{"index",index++},{"key",EfmiBridge::Utf8(m.file)+"|"+c.binding},{"name",c.name},{"binding",c.binding},{"min",c.low},{"max",c.high},{"value",c.value},{"integer",c.integer},{"dirty",c.dirty}});}for(auto& mesh:m.meshes)meshes.push_back({{"index",meshIndex++},{"key",EfmiBridge::Utf8(m.file)+"|"+mesh.name},{"name",EfmiBridge::MeshLabel(mesh.name)},{"condition",mesh.condition},{"resource",mesh.resource},{"supported",mesh.supported},{"reason",mesh.reason},{"values",mesh.values},{"dirty",mesh.dirty}});mods.push_back({{"name",m.name},{"file",EfmiBridge::Utf8(m.file)},{"namespace",m.space},{"controls",controls},{"meshes",meshes}});}return {{"mouth_contact",AttachmentState()},{"folder",EfmiBridge::Utf8(efmiScan.folder)},{"reload_key",efmiScan.reloadKey},{"bridge_available",!efmiScan.efmiRoot.empty()},{"mods",mods},{"errors",efmiScan.errors}};}
+bool BundledLiveMesh();
+std::set<std::filesystem::path> ExternalBridgeFolders(){
+ std::set<std::filesystem::path> folders{efmiScan.folder};
+ for(auto& mod:efmiScan.mods)for(auto path=mod.file.parent_path();path!=efmiScan.folder;path=path.parent_path()){
+  if(path.empty()||path==path.parent_path())break;
+  folders.insert(path);
+ }
+ return folders;
+}
+void ScanExternalFolder(){
+ auto modRoot=(moduleFolder/"../../mod").lexically_normal();
+ if(liveExternalMesh)liveExternalMesh->Flush();
+ if(!std::filesystem::is_directory(modRoot)){
+  efmiScan={};efmiScan.folder=modRoot;
+  if(mouthContact.target!=MouthContact::Attachment::Off)PrepareMouthGeometry();
+  panelStatus="找不到 mod 資料夾";
+  return;
+ }
+ efmiScan=EfmiBridge::Discover(modRoot);
+ for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes)ExternalMesh::Probe(mod,mesh);
+ std::vector<std::string> profileErrors;auto labels=ExternalModels::Load({moduleFolder/"../../external-models",PanelSettingsPath().parent_path()/"ExternalModels"},profileErrors);for(auto& m:efmiScan.mods)for(auto& c:m.controls){std::set<std::string> affected;for(auto& mesh:m.meshes)if(EfmiBridge::Uses(mesh.condition,c.binding))affected.insert(EfmiBridge::MeshLabel(mesh.name));c.name=affected.empty()?c.binding:*affected.begin()+(affected.size()>1?" 等 "+std::to_string(affected.size())+" 項":"");for(auto& p:labels)if(std::filesystem::path(std::u8string(p.source.begin(),p.source.end())).lexically_normal()==m.file.lexically_normal())for(auto& q:p.parameters)if(EfmiBridge::Lower(q.binding)==EfmiBridge::Lower(c.binding))c.name=q.name;}
+ // Restore pending overrides, including bridges written inside individual appearance folders.
+ if(!efmiScan.efmiRoot.empty())for(auto& folder:ExternalBridgeFolders()){
+  auto pathOut=folder/"BEM.ExternalControls.ini";
+  if(!std::filesystem::exists(pathOut))continue;
+  EfmiBridge::Owned(pathOut);std::istringstream in(EfmiBridge::ReadFile(pathOut));std::string line;while(std::getline(in,line))for(auto& m:efmiScan.mods)for(auto& c:m.controls){auto prefix="post $\\"+m.space+"\\"+c.binding.substr(1)+" = ";if(line.starts_with(prefix)){try{auto value=std::stof(line.substr(prefix.size()));if(std::isfinite(value)&&value>=c.low&&value<=c.high){c.value=value;c.dirty=true;}}catch(...){}}}}
+ for(auto& part:externalCatalog)if(part.value("backend",std::string{})=="efmi_shapekey")part["status"]="請在外部模型調整重新掃描 mod，使用 INI 重載橋接";
+ for(auto& folder:ExternalBridgeFolders()){auto settingsPath=folder/"BEM.GeneratedMeshes"/"settings.json";if(std::filesystem::exists(settingsPath)&&(!BundledLiveMesh()||std::filesystem::exists(folder/"BEM.ExternalMesh.ini"))){try{auto saved=Presets::Json::parse(EfmiBridge::ReadFile(settingsPath));if(saved.value("format",std::string{})=="bem-external-mesh-settings")for(auto& m:efmiScan.mods)for(auto& mesh:m.meshes){auto key=EfmiBridge::Utf8(m.file)+"|"+mesh.name;if(mesh.supported&&saved.at("values").contains(key)){auto values=saved["values"][key].get<std::array<float,12>>();if(ExternalMesh::Valid(values)){mesh.values=values;mesh.dirty=true;}}}}catch(...){Log("External mesh settings invalid; retain scan defaults");}}}
+ if(BundledLiveMesh())for(auto& mod:efmiScan.mods){
+  try{ExternalMesh::LoadLiveSettings(mod);}catch(...){Log("Invalid live mesh settings");}
+ }
+ if(mouthContact.target!=MouthContact::Attachment::Off)PrepareMouthGeometry();
+ panelStatus="外部模型已掃描："+std::to_string(efmiScan.mods.size())+" 個 INI；可見狀態尚未驗證";}
+void SetMeshAttachment(MouthContact::Attachment target,bool enabled){
+ using enum MouthContact::Attachment;
+ if((!enabled&&mouthContact.target!=target)||(enabled&&mouthContact.target==target))return;
+ mouthContact.target=enabled?target:Off;
+ mouthContact.rebind=true;
+ mouthContact.lastTrace=0;
+ if(enabled){
+  if(efmiScan.folder.empty())ScanExternalFolder();
+  else PrepareMouthGeometry();
+ }else mouthContact.status="吸附未啟用";
+}
+void SetMeshAttachment(const std::string& target,bool enabled){
+ const auto& keys=MouthContact::AttachmentKeys;
+ const auto selected=std::find(keys.begin()+1,keys.end(),target);
+ if(selected==keys.end())throw std::runtime_error("Unknown attachment target");
+ SetMeshAttachment(static_cast<MouthContact::Attachment>(selected-keys.begin()),enabled);
+}
+bool PreviewExternalControl(const EfmiBridge::Mod& mod,const EfmiBridge::Control& control){
+ if(efmiScan.bundledMods.empty()||mod.space.empty())return false;
+ const auto path=efmiScan.efmiRoot/L"d3d11.dll";
+ const auto library=GetModuleHandleW(path.c_str());
+ if(!library)return false;
+ using Preview=BOOL (WINAPI*)(const wchar_t*,const wchar_t*,float);
+ const auto preview=reinterpret_cast<Preview>(GetProcAddress(library,"EaiPreviewIniVariable"));
+ if(!preview)return false;
+ const std::filesystem::path scope(std::u8string(mod.space.begin(),mod.space.end()));
+ const std::wstring binding(control.binding.begin(),control.binding.end());
+ return preview(scope.c_str(),binding.c_str(),control.value)!=FALSE;
+}
+bool SetExternalValue(int index,const std::string& key,float value){
+ for(auto& mod:efmiScan.mods)for(auto& control:mod.controls){
+  if(index--!=0)continue;
+  if(key!=EfmiBridge::Utf8(mod.file)+"|"+control.binding||!std::isfinite(value)||value<control.low||
+     value>control.high||(control.integer&&std::floor(value)!=value))return false;
+  control.value=value;
+  control.dirty=true;
+  panelStatus=PreviewExternalControl(mod,control)?"已送出原生參數即時預覽":"參數待寫入；寫入橋接後回遊戲重載 EFMI";
+  return true;
+ }
+ return false;
+}
+bool BundledLiveMesh(){
+ return !efmiScan.bundledMods.empty()&&
+  std::filesystem::is_regular_file(efmiScan.efmiRoot/"EAI-LiveSidecars.txt");
+}
+std::string LiveMeshError(){return liveExternalMesh?liveExternalMesh->Error():std::string{};}
+void QueueExternalMesh(){
+ if(BundledLiveMesh()){
+  if(!liveExternalMesh)liveExternalMesh=new ExternalMesh::LiveBuffers;
+  liveExternalMesh->Queue(efmiScan);
+  panelStatus="已送出即時網格更新";
+ }
+ else panelStatus="網格調整待寫入；回遊戲重載 EFMI 套用";
+}
+bool SetExternalMeshValue(int index,const std::string& key,int field,float value,bool linked){if(field<0||field>=12||!std::isfinite(value))return false;for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes){if(index--!=0)continue;if(key!=EfmiBridge::Utf8(mod.file)+"|"+mesh.name||!mesh.supported)return false;auto next=mesh.values;next[field]=value;if(!ExternalMesh::Valid(next))return false;auto label=EfmiBridge::MeshLabel(mesh.name);for(auto& other:mod.meshes)if(&other==&mesh||(linked&&EfmiBridge::MeshLabel(other.name)==label)){if(!other.supported)return false;}for(auto& other:mod.meshes)if(&other==&mesh||(linked&&EfmiBridge::MeshLabel(other.name)==label)){other.values[field]=value;other.dirty=true;}QueueExternalMesh();return true;}return false;}
+bool ResetExternalMesh(int index,const std::string& key){for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes){if(index--!=0)continue;if(key!=EfmiBridge::Utf8(mod.file)+"|"+mesh.name||!mesh.supported)return false;auto label=EfmiBridge::MeshLabel(mesh.name);for(auto& other:mod.meshes)if(EfmiBridge::MeshLabel(other.name)==label){other.values={0,0,0,0,0,0,1,1,1,0,0,0};ExternalMesh::Probe(mod,other);other.dirty=true;}QueueExternalMesh();return true;}return false;}
 bool ResetExternalMod(const std::string& file){
  auto found=std::find_if(efmiScan.mods.begin(),efmiScan.mods.end(),[&](auto& m){return EfmiBridge::Utf8(m.file)==file;});if(found==efmiScan.mods.end())return false;
  auto fresh=EfmiBridge::Parse(found->file,EfmiBridge::ReadFile(found->file),efmiScan.efmiRoot);auto restored=*found;
  for(auto& c:restored.controls){auto original=std::find_if(fresh.controls.begin(),fresh.controls.end(),[&](auto& f){return f.binding==c.binding;});if(original==fresh.controls.end())throw std::runtime_error("Mod parameters changed; rescan first");c.value=original->value;c.dirty=true;}
- for(auto& mesh:restored.meshes)if(mesh.supported){mesh.values={0,0,0,0,0,0,1,1,1,0,0,0};ExternalMesh::Probe(restored,mesh);if(!mesh.supported)throw std::runtime_error("Mesh changed; rescan first");mesh.dirty=true;}
- *found=std::move(restored);panelStatus="此模組已全部還原預設；請寫入橋接並重載 EFMI";return true;
+ const bool live=BundledLiveMesh();
+ for(auto& mesh:restored.meshes)if(mesh.supported&&(!live||mesh.dirty)){mesh.values={0,0,0,0,0,0,1,1,1,0,0,0};ExternalMesh::Probe(restored,mesh);if(!mesh.supported)throw std::runtime_error("Mesh changed; rescan first");mesh.dirty=true;}
+  *found=std::move(restored);
+ QueueExternalMesh();
+ if(!found->controls.empty()){
+  bool previewed=true;
+  for(const auto& control:found->controls)previewed=PreviewExternalControl(*found,control)&&previewed;
+  panelStatus=previewed?"已送出原生參數即時預覽":"EFMI 參數還原需寫入橋接並重載";
+ }
+ return true;
 }
-void WriteExternalMeshes(){auto buffers=ExternalMesh::Build(efmiScan);if(buffers.empty())return;auto bridge=EfmiBridge::OutputPath(efmiScan);bridge.replace_filename(L"BEM.ExternalMesh.ini");if(std::filesystem::exists(bridge)&&!EfmiBridge::ReadFile(bridge).starts_with(ExternalMesh::Marker))throw std::runtime_error("Mesh bridge filename is occupied");auto revision=std::to_string(GetTickCount64());auto ini=ExternalMesh::Ini(buffers,revision);auto directory=efmiScan.folder/"BEM.GeneratedMeshes"/revision;if(std::filesystem::exists(directory))throw std::runtime_error("Mesh output revision collision; try again");std::filesystem::create_directories(directory);for(size_t i=0;i<buffers.size();++i){std::ofstream out(directory/("buffer"+std::to_string(i)+".buf"),std::ios::binary|std::ios::trunc);out.write(reinterpret_cast<const char*>(buffers[i].bytes.data()),buffers[i].bytes.size());out.flush();if(!out.good())throw std::runtime_error("Cannot write generated mesh buffer");}auto temp=bridge;temp+=L".bem-tmp";{std::ofstream out(temp,std::ios::binary|std::ios::trunc);out<<ini;out.flush();if(!out.good())throw std::runtime_error("Cannot write mesh bridge");}if(!MoveFileExW(temp.c_str(),bridge.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Cannot commit mesh bridge");auto values=Presets::Json::object();for(auto& m:efmiScan.mods)for(auto& mesh:m.meshes)if(mesh.dirty)values[EfmiBridge::Utf8(m.file)+"|"+mesh.name]=mesh.values;auto settings=efmiScan.folder/"BEM.GeneratedMeshes"/"settings.json";auto tempSettings=settings;tempSettings+=L".tmp";{std::ofstream out(tempSettings,std::ios::binary|std::ios::trunc);out<<Presets::Json{{"format","bem-external-mesh-settings"},{"values",values}}.dump(2);out.flush();if(!out.good())throw std::runtime_error("Mesh applied but settings save failed");}if(!MoveFileExW(tempSettings.c_str(),settings.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Mesh applied but settings commit failed");}
-void WriteExternalBridge(){auto path=EfmiBridge::OutputPath(efmiScan);EfmiBridge::Owned(path);bool dirtyControls=false;for(auto& mod:efmiScan.mods)for(auto& control:mod.controls)dirtyControls|=control.dirty;if(!dirtyControls){bool dirtyMeshes=false;for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes)dirtyMeshes|=mesh.dirty;if(!dirtyMeshes)throw std::runtime_error("Adjust a parameter or mesh before writing bridge");WriteExternalMeshes();panelStatus="網格橋接已寫入；回遊戲重載 EFMI（"+efmiScan.reloadKey+"）";return;}auto data=EfmiBridge::Generate(efmiScan);WriteExternalMeshes();auto temp=path;temp+=L".bem-tmp";{std::ofstream out(temp,std::ios::binary|std::ios::trunc);out<<data;out.flush();if(!out.good())throw std::runtime_error("Cannot write bridge file");}if(!MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Cannot commit bridge file");panelStatus="橋接已寫入；回遊戲重載 EFMI（"+efmiScan.reloadKey+"）";}
-void RemoveExternalBridge(){auto meshPath=EfmiBridge::OutputPath(efmiScan);meshPath.replace_filename(L"BEM.ExternalMesh.ini");if(std::filesystem::exists(meshPath)){if(!EfmiBridge::ReadFile(meshPath).starts_with(ExternalMesh::Marker))throw std::runtime_error("Mesh bridge filename is occupied");auto disabled=meshPath;disabled.replace_extension(L"bem-disabled");if(!MoveFileExW(meshPath.c_str(),disabled.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Cannot disable mesh bridge");}auto path=EfmiBridge::OutputPath(efmiScan);EfmiBridge::Owned(path);if(std::filesystem::exists(path)){auto disabled=path;disabled.replace_extension(L"bem-disabled");if(!MoveFileExW(path.c_str(),disabled.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Cannot disable bridge");}panelStatus="橋接已停用；回遊戲重載 EFMI。已套用值可能被 EFMI 保存，需手動還原參數";}
+void WriteExternalMeshes(){
+ auto buffers=ExternalMesh::Build(efmiScan);
+ if(buffers.empty())return;
+ auto bridge=EfmiBridge::OutputPath(efmiScan);
+ bridge.replace_filename(L"BEM.ExternalMesh.ini");
+ if(std::filesystem::exists(bridge)&&!EfmiBridge::ReadFile(bridge).starts_with(ExternalMesh::Marker))
+  throw std::runtime_error("Mesh bridge filename is occupied");
+ auto revision=std::to_string(GetTickCount64())+"_"+std::to_string(GetCurrentProcessId());
+ auto ini=ExternalMesh::Ini(buffers,revision);
+ auto directory=efmiScan.folder/"BEM.GeneratedMeshes"/revision;
+ if(!std::filesystem::create_directories(directory))throw std::runtime_error("Mesh output revision collision; try again");
+ for(size_t i=0;i<buffers.size();++i)ExternalMesh::WriteBuffer(directory/ExternalMesh::BufferName(i),buffers[i].bytes);
+ auto temp=bridge;temp+=L".bem-tmp";
+ {
+  std::ofstream out(temp,std::ios::binary|std::ios::trunc);
+  out<<ini;out.close();
+  if(!out)throw std::runtime_error("Cannot write mesh bridge");
+ }
+ if(!MoveFileExW(temp.c_str(),bridge.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+  throw std::runtime_error("Cannot commit mesh bridge");
+ auto values=Presets::Json::object();
+ for(auto& m:efmiScan.mods)for(auto& mesh:m.meshes)
+  if(mesh.dirty)values[EfmiBridge::Utf8(m.file)+"|"+mesh.name]=mesh.values;
+ auto settings=efmiScan.folder/"BEM.GeneratedMeshes"/"settings.json";
+ auto tempSettings=settings;tempSettings+=L".tmp";
+ {
+  std::ofstream out(tempSettings,std::ios::binary|std::ios::trunc);
+  out<<Presets::Json{{"format","bem-external-mesh-settings"},{"values",values}}.dump(2);
+  out.close();
+  if(!out)throw std::runtime_error("Mesh applied but settings save failed");
+ }
+ if(!MoveFileExW(tempSettings.c_str(),settings.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+  throw std::runtime_error("Mesh applied but settings commit failed");
+}
+void WriteExternalBridge(){
+ auto path=EfmiBridge::OutputPath(efmiScan);
+ EfmiBridge::Owned(path);
+ bool dirtyControls=false,dirtyMeshes=false;
+ for(auto& mod:efmiScan.mods){
+  for(auto& control:mod.controls)dirtyControls|=control.dirty;
+  for(auto& mesh:mod.meshes)dirtyMeshes|=mesh.dirty;
+ }
+ const bool live=BundledLiveMesh();
+ if(!dirtyControls){
+  if(!dirtyMeshes)throw std::runtime_error("Adjust a parameter or mesh before writing bridge");
+  if(live){QueueExternalMesh();return;}
+  WriteExternalMeshes();
+  panelStatus="網格橋接已寫入；回遊戲重載 EFMI（"+efmiScan.reloadKey+"）";
+  return;
+ }
+ std::map<std::filesystem::path,EfmiBridge::Scan> destinations;
+ for(auto& mod:efmiScan.mods){
+  if(std::none_of(mod.controls.begin(),mod.controls.end(),[](auto& control){return control.dirty;}))continue;
+  auto target=path;
+  for(auto folder=mod.file.parent_path();folder!=efmiScan.folder;folder=folder.parent_path()){
+   auto prior=folder/path.filename();
+   if(std::filesystem::exists(prior)){EfmiBridge::Owned(prior);target=prior;break;}
+  }
+  auto& section=destinations[target];
+  section.efmiRoot=efmiScan.efmiRoot;
+  section.mods.push_back(mod);
+ }
+ if(!live)WriteExternalMeshes();
+ for(auto& [target,scope]:destinations){
+  auto data=EfmiBridge::Generate(scope);
+  auto temp=target;temp+=L".bem-tmp";
+  {
+   std::ofstream out(temp,std::ios::binary|std::ios::trunc);
+   out<<data;out.close();
+   if(!out)throw std::runtime_error("Cannot write bridge file");
+  }
+  if(!MoveFileExW(temp.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+   throw std::runtime_error("Cannot commit bridge file");
+ }
+ panelStatus="橋接已保存；需要時可重載 EFMI（"+efmiScan.reloadKey+"）";
+}
+void RemoveExternalBridge(){
+ auto path=EfmiBridge::OutputPath(efmiScan);
+ bool reload=false;
+ for(auto& folder:ExternalBridgeFolders())for(auto name:{L"BEM.ExternalControls.ini",L"BEM.ExternalMesh.ini"}){
+  auto file=folder/name;
+  if(!std::filesystem::exists(file))continue;
+  if(file.filename()==path.filename())EfmiBridge::Owned(file);
+  else if(!EfmiBridge::ReadFile(file).starts_with(ExternalMesh::Marker))
+   throw std::runtime_error("Mesh bridge filename is occupied");
+  auto disabled=file;disabled.replace_extension(L"bem-disabled");
+  if(!MoveFileExW(file.c_str(),disabled.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+   throw std::runtime_error("Cannot disable bridge");
+  reload=true;
+ }
+ if(BundledLiveMesh()){
+  if(liveExternalMesh)liveExternalMesh->Clear();
+  ExternalMesh::DisableLiveFiles(efmiScan);
+  for(auto& mod:efmiScan.mods)for(auto& mesh:mod.meshes)if(mesh.supported){
+   mesh.values={0,0,0,0,0,0,1,1,1,0,0,0};
+   mesh.dirty=false;
+   ExternalMesh::Probe(mod,mesh);
+  }
+ }
+ panelStatus=reload?"橋接已停用；回遊戲重載 EFMI。已套用值可能被 EFMI 保存，需手動還原參數":"已停用即時網格調整";
+}
 bool DraftSourcesValid(){
  if(workflow.draft.animation.starts_with("clip:")){auto found=animationLibrary.find(workflow.draft.animation.substr(5));if(found==animationLibrary.end()||found->second->targetActor!=1)return false;}
  if(workflow.draft.controlledPose=="imported"){if(!workflow.draft.controlledAnimation.starts_with("clip:"))return false;auto found=animationLibrary.find(workflow.draft.controlledAnimation.substr(5));if(found==animationLibrary.end()||found->second->targetActor!=0||found->second->targetCharacter!=workflow.draft.controlled)return false;}
@@ -944,22 +1123,7 @@ BE_Result BE_CALL Message(const char* request,const char* body){
   if(command=="animation_delete"||command=="animations_reorder"){bool ok=command=="animation_delete"?DeleteAnimation(payload.at("id").get<std::string>()):ReorderAnimations(payload.at("order"));return host->reply(host->context,request,ok?BE_Result_Ok:BE_Result_InvalidArgument,ok?"{\"status\":\"animation_library_updated\"}":"{\"status\":\"animation_library_update_failed\"}");}
   if(command=="breast_physics_get"||command=="breast_physics_set"){if(command=="breast_physics_set"){bool enabled=payload.value("enabled",breast.enabled);auto manual=payload.value("manual",breast.manual);if(!manual.empty()&&!BreastDefaults().contains(manual))return host->reply(host->context,request,BE_Result_InvalidArgument,"{}");breast.enabled=enabled;if(enabled){breast.automaticMain=payload.value("automatic_main",breast.automaticMain);breast.automatic=payload.value("automatic",breast.automatic)&&!breast.automaticMain;breast.manual=manual;}breast.reset=true;SavePanelSettings();}auto text=Presets::Json{{"breast_physics",BreastJson()}}.dump();return host->reply(host->context,request,BE_Result_Ok,text.c_str());}
   if(command=="free_camera_hide_ui"||command=="free_camera_get"||command=="free_camera_set"||command=="free_camera_reset"||command=="free_camera_hotkey"){if(command=="free_camera_hide_ui"){freeCamera.hideUi=payload.value("hide_ui",false);SavePanelSettings();}if(command=="free_camera_set"){if(!hook){auto text=Presets::Json{{"detail","請先手動連接遊戲入口"}}.dump();return host->reply(host->context,request,BE_Result_NotReady,text.c_str());}freeCamera.request=payload.value("enabled",false)?1:0;if(freeCamera.request==1)freeCamera.status="等待遊戲更新啟用自由相機";}if(command=="free_camera_reset")freeCamera.reset=true;if(command=="free_camera_hotkey"){int key=payload.at("key");if(!FreeCamera::ValidHotkey(key))return host->reply(host->context,request,BE_Result_InvalidArgument,"{\"detail\":\"Reserved or invalid camera shortcut\"}");FreeCameraInput::hotkey=key;FreeCameraInput::toggleRequests=0;SavePanelSettings();}auto text=Presets::Json{{"free_camera",FreeCameraJson()}}.dump();return host->reply(host->context,request,BE_Result_Ok,text.c_str());}
-  if(command.starts_with("native_efmi_")){
-   try{
-    if(command=="native_efmi_load")QueueNativeEfmi(payload.at("path").get<std::string>());
-    else if(command=="native_efmi_restore")CancelNativeEfmi();
-    else if(command=="native_efmi_inspect")QueueNativeEfmiInspection();
-    else if(command=="native_efmi_weight")SetNativeEfmiWeight(payload.at("weight").get<float>());
-    else if(command!="native_efmi_get")throw std::runtime_error("Unknown native EFMI command");
-    auto state=NativeEfmiState().dump();
-    return host->reply(host->context,request,BE_Result_Ok,state.c_str());
-   }catch(const std::exception& e){
-    auto error=Presets::Json{{"detail",e.what()}}.dump();
-    return host->reply(host->context,request,BE_Result_InvalidArgument,error.c_str());
-   }
-  }
-  if(command=="external_picker"){bool ok=InteractionPanel::RequestExternalPicker();return host->reply(host->context,request,ok?BE_Result_Ok:BE_Result_NotReady,ok?"{\"status\":\"external_picker_opening\"}":"{\"status\":\"external_picker_unavailable\"}");}
-  if(command=="external_scan"||command=="external_get"||command=="external_set"||command=="external_apply"||command=="external_remove"||command=="external_mesh_set"||command=="external_mesh_reset"||command=="external_mod_reset"){try{if(command=="external_mod_reset"&&!ResetExternalMod(payload.at("file")))throw std::runtime_error("Mod missing; rescan first");if(command=="external_scan")ScanExternalFolder(payload.value("path",externalFolder));if(command=="external_set"&&!SetExternalValue(payload.at("index"),payload.at("key"),payload.at("value")))throw std::runtime_error("Invalid external parameter; rescan first");if(command=="external_mesh_reset"&&!ResetExternalMesh(payload.at("index"),payload.at("key")))throw std::runtime_error("Invalid mesh; rescan first");if(command=="external_mesh_set"&&!SetExternalMeshValue(payload.at("index"),payload.at("key"),payload.at("field"),payload.at("value"),payload.value("linked",true)))throw std::runtime_error("Invalid mesh value; rescan first");if(command=="external_apply")WriteExternalBridge();if(command=="external_remove")RemoveExternalBridge();auto data=EfmiCatalog();data["detail"]=panelStatus;auto text=data.dump();return host->reply(host->context,request,BE_Result_Ok,text.c_str());}catch(const std::exception& e){auto text=Presets::Json{{"detail",e.what()}}.dump();return host->reply(host->context,request,BE_Result_InvalidArgument,text.c_str());}}
+  if(command=="external_mouth_set"||command=="external_attachment_set"||command=="external_scan"||command=="external_get"||command=="external_set"||command=="external_apply"||command=="external_remove"||command=="external_mesh_set"||command=="external_mesh_reset"||command=="external_mod_reset"){try{if(command=="external_mouth_set")SetMeshAttachment(MouthContact::Attachment::Mouth,payload.at("enabled").get<bool>());if(command=="external_attachment_set")SetMeshAttachment(payload.at("target").get<std::string>(),payload.at("enabled").get<bool>());if(command=="external_mod_reset"&&!ResetExternalMod(payload.at("file")))throw std::runtime_error("Mod missing; rescan first");if(command=="external_scan"||(command=="external_get"&&efmiScan.folder.empty()))ScanExternalFolder();if(command=="external_set"&&!SetExternalValue(payload.at("index"),payload.at("key"),payload.at("value")))throw std::runtime_error("Invalid external parameter; rescan first");if(command=="external_mesh_reset"&&!ResetExternalMesh(payload.at("index"),payload.at("key")))throw std::runtime_error("Invalid mesh; rescan first");if(command=="external_mesh_set"&&!SetExternalMeshValue(payload.at("index"),payload.at("key"),payload.at("field"),payload.at("value"),payload.value("linked",true)))throw std::runtime_error("Invalid mesh value; rescan first");if(command=="external_apply")WriteExternalBridge();if(command=="external_remove")RemoveExternalBridge();auto data=EfmiCatalog();auto liveError=LiveMeshError();data["detail"]=liveError.empty()?panelStatus:liveError;auto text=data.dump();return host->reply(host->context,request,BE_Result_Ok,text.c_str());}catch(const std::exception& e){auto text=Presets::Json{{"detail",e.what()}}.dump();return host->reply(host->context,request,BE_Result_InvalidArgument,text.c_str());}}
   if(command=="bones_scan"){if(!hook)return host->reply(host->context,request,BE_Result_NotReady,"{\"status\":\"connect_first\"}");bonesPending=true;return host->reply(host->context,request,BE_Result_Ok,"{\"status\":\"bones_scan_queued_return_to_game\"}");}
   if(command=="fbx_picker"){if(!hook)return host->reply(host->context,request,BE_Result_NotReady,"{\"status\":\"connect_first\"}");auto manager=payload.value("manager_action",std::string("none"));if(manager!="imported"&&manager!="none"&&manager!="standing"&&manager!="waist_hold"&&manager!="front_waist"&&manager!="back_waist"&&manager!="head_pat")return host->reply(host->context,request,BE_Result_InvalidArgument,"{\"status\":\"invalid_manager_action\"}");if(!mainActor)fbxManagerAction=manager;bool ok=InteractionPanel::RequestFbxPicker(mainActor);return host->reply(host->context,request,ok?BE_Result_Ok:BE_Result_NotReady,ok?"{\"status\":\"fbx_picker_opening\"}":"{\"status\":\"fbx_picker_unavailable\"}");}
   if(command=="import_fbx"){bool ok=QueueFbxImport(payload.at("path").get<std::string>(),mainActor);return host->reply(host->context,request,ok?BE_Result_Ok:BE_Result_NotReady,ok?"{\"status\":\"fbx_queued\"}":"{\"status\":\"fbx_request_rejected\"}");}
@@ -1062,16 +1226,16 @@ bool SavePanelSettings(){
 #ifdef INTERACTION_NO_OVERLAY
  return true;
 #else
- try{if(pairStorageInvalid)return false;auto file=PanelSettingsPath();if(file.empty())return false;std::filesystem::create_directories(file.parent_path());auto temp=file;temp+=L".tmp";auto data=Presets::Json{{"paired_animations",pairedAnimations.Encode()},{"disabled_operators",operatorWhitelist.Encode()},{"ui_schema",18},{"breast_physics",{{"enabled",breast.enabled},{"automatic",breast.automatic},{"automatic_main",breast.automaticMain},{"manual",breast.manual}}},{"partner_animation_reuse",partnerAnimationReuse},{"free_camera_hotkey",FreeCameraInput::hotkey.load()},{"free_camera_hide_ui",freeCamera.hideUi},{"preset_bank",presetBank.Encode()},{"grip_values",gripTarget.Encode()},{"grip_schema",2},{"bone_offsets",boneTarget.Encode()},{"calibration_loop",calibrationLoop},{"controlled_loop",controlledLoop},{"sync_animations",syncAnimations},{"controlled_support",workflow.draft.controlledSupport},{"controlled_pose",workflow.draft.controlledPose},{"controlled_animation",workflow.draft.controlledAnimation},{"support_mode",supportTarget},{"blender_folder",blenderFolder},{"animation_import_folders",animationImportFolders},{"external_folder",externalFolder},{"skeleton_references",EncodeSkeletonReferences()},{"base_configuration",panelBaseline}}.dump();if(data.size()>33554432)return false;{std::ofstream stream(temp,std::ios::binary|std::ios::trunc);stream<<data;stream.flush();if(!stream.good())return false;}return MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;}catch(...){return false;}
+ try{if(pairStorageInvalid)return false;auto file=PanelSettingsPath();if(file.empty())return false;std::filesystem::create_directories(file.parent_path());auto temp=file;temp+=L".tmp";auto data=Presets::Json{{"paired_animations",pairedAnimations.Encode()},{"disabled_operators",operatorWhitelist.Encode()},{"ui_schema",18},{"breast_physics",{{"enabled",breast.enabled},{"automatic",breast.automatic},{"automatic_main",breast.automaticMain},{"manual",breast.manual}}},{"partner_animation_reuse",partnerAnimationReuse},{"free_camera_hotkey",FreeCameraInput::hotkey.load()},{"free_camera_hide_ui",freeCamera.hideUi},{"preset_bank",presetBank.Encode()},{"grip_values",gripTarget.Encode()},{"grip_schema",2},{"bone_offsets",boneTarget.Encode()},{"calibration_loop",calibrationLoop},{"controlled_loop",controlledLoop},{"sync_animations",syncAnimations},{"controlled_support",workflow.draft.controlledSupport},{"controlled_pose",workflow.draft.controlledPose},{"controlled_animation",workflow.draft.controlledAnimation},{"support_mode",supportTarget},{"blender_folder",blenderFolder},{"animation_import_folders",animationImportFolders},{"skeleton_references",EncodeSkeletonReferences()},{"base_configuration",panelBaseline}}.dump();if(data.size()>33554432)return false;{std::ofstream stream(temp,std::ios::binary|std::ios::trunc);stream<<data;stream.flush();if(!stream.good())return false;}return MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;}catch(...){return false;}
 #endif
 }
 void LoadPanelSettings(){
 #ifndef INTERACTION_NO_OVERLAY
- try{auto file=PanelSettingsPath();if(file.empty()||!std::filesystem::exists(file)||std::filesystem::file_size(file)>33554432)return;std::ifstream in(file,std::ios::binary);auto data=Presets::Json::parse(in);if(data.contains("paired_animations")&&!pairedAnimations.Read(data.at("paired_animations"))){pairStorageInvalid=true;Log("Paired animation storage invalid; saving blocked to preserve original file");}if(data.contains("disabled_operators"))operatorWhitelist.Read(data.at("disabled_operators"));if(data.contains("breast_physics")&&data["breast_physics"].is_object()){auto b=data["breast_physics"];breast.enabled=b.value("enabled",false);breast.automaticMain=b.value("automatic_main",false);breast.automatic=b.value("automatic",true)&&!breast.automaticMain;auto manual=b.value("manual",std::string{});if(BreastDefaults().contains(manual))breast.manual=manual;breast.reset=true;}partnerAnimationReuse=data.value("partner_animation_reuse",false);freeCamera.hideUi=data.value("free_camera_hide_ui",false);int cameraKey=data.value("free_camera_hotkey",VK_F9);if(FreeCamera::ValidHotkey(cameraKey))FreeCameraInput::hotkey=cameraKey;if(data.contains("animation_import_folders")){const auto& folders=data["animation_import_folders"];if(folders.is_array()&&folders.size()==2&&folders[0].is_string()&&folders[1].is_string())animationImportFolders=folders.get<std::array<std::string,2>>();}if(data.value("base_configuration",std::string{})!=panelBaseline){Log("Loader configuration changed offline; retain new loader configuration");return;}auto bank=presetBank;if(!bank.Read(data.at("preset_bank")))return;Grip::Settings settings;if(!settings.Read(Presets::Json{{"grip_values",data.at("grip_values")}}.dump()))return;blenderFolder=data.value("blender_folder",blenderFolder);externalFolder=data.value("external_folder",externalFolder);if(data.contains("skeleton_references"))ReadSkeletonReferences(data["skeleton_references"]);calibrationLoop=data.value("calibration_loop",false);controlledLoop=data.value("controlled_loop",false);syncAnimations=data.value("sync_animations",false);controlledSupport=data.value("controlled_support",std::string("none"));controlledPose=data.value("controlled_pose",std::string("inherit"));selectedControlledClip=data.value("controlled_animation",std::string("none"));auto savedSupport=Support::Normalize(data.value("support_mode",std::string("none")));if(Support::Valid(savedSupport))supportTarget=savedSupport;currentUiSettings=data.value("ui_schema",0)>=16;presetBank=bank;gripTarget=settings;if(data.contains("bone_offsets"))boneTarget.Read(data["bone_offsets"]);Log("Overlay settings restored from local application data");}catch(...){Log("Overlay settings invalid; retain loader configuration");}
+ try{auto file=PanelSettingsPath();if(file.empty()||!std::filesystem::exists(file)||std::filesystem::file_size(file)>33554432)return;std::ifstream in(file,std::ios::binary);auto data=Presets::Json::parse(in);if(data.contains("paired_animations")&&!pairedAnimations.Read(data.at("paired_animations"))){pairStorageInvalid=true;Log("Paired animation storage invalid; saving blocked to preserve original file");}if(data.contains("disabled_operators"))operatorWhitelist.Read(data.at("disabled_operators"));if(data.contains("breast_physics")&&data["breast_physics"].is_object()){auto b=data["breast_physics"];breast.enabled=b.value("enabled",false);breast.automaticMain=b.value("automatic_main",false);breast.automatic=b.value("automatic",true)&&!breast.automaticMain;auto manual=b.value("manual",std::string{});if(BreastDefaults().contains(manual))breast.manual=manual;breast.reset=true;}partnerAnimationReuse=data.value("partner_animation_reuse",false);freeCamera.hideUi=data.value("free_camera_hide_ui",false);int cameraKey=data.value("free_camera_hotkey",VK_F9);if(FreeCamera::ValidHotkey(cameraKey))FreeCameraInput::hotkey=cameraKey;if(data.contains("animation_import_folders")){const auto& folders=data["animation_import_folders"];if(folders.is_array()&&folders.size()==2&&folders[0].is_string()&&folders[1].is_string())animationImportFolders=folders.get<std::array<std::string,2>>();}if(data.value("base_configuration",std::string{})!=panelBaseline){Log("Loader configuration changed offline; retain new loader configuration");return;}auto bank=presetBank;if(!bank.Read(data.at("preset_bank")))return;Grip::Settings settings;if(!settings.Read(Presets::Json{{"grip_values",data.at("grip_values")}}.dump()))return;blenderFolder=data.value("blender_folder",blenderFolder);if(data.contains("skeleton_references"))ReadSkeletonReferences(data["skeleton_references"]);calibrationLoop=data.value("calibration_loop",false);controlledLoop=data.value("controlled_loop",false);syncAnimations=data.value("sync_animations",false);controlledSupport=data.value("controlled_support",std::string("none"));controlledPose=data.value("controlled_pose",std::string("inherit"));selectedControlledClip=data.value("controlled_animation",std::string("none"));auto savedSupport=Support::Normalize(data.value("support_mode",std::string("none")));if(Support::Valid(savedSupport))supportTarget=savedSupport;currentUiSettings=data.value("ui_schema",0)>=16;presetBank=bank;gripTarget=settings;if(data.contains("bone_offsets"))boneTarget.Read(data["bone_offsets"]);Log("Overlay settings restored from local application data");}catch(...){Log("Overlay settings invalid; retain loader configuration");}
 #endif
 }
 bool AnimationBindingMismatch(const std::string& clipId,const std::string& character){auto it=animationLibrary.find(clipId.starts_with("clip:")?clipId.substr(5):std::string{});return it!=animationLibrary.end()&&!it->second->targetCharacter.empty()&&!character.empty()&&it->second->targetCharacter!=character;}
-InteractionPanel::Snapshot PanelRead(){std::lock_guard lock(gate);InteractionPanel::Snapshot state;state.nativeEfmiStatus=nativeEfmi.status;state.nativeEfmiShape=nativeEfmi.hasShape;state.nativeEfmiWeight=nativeEfmi.weight;state.spawnCharacterStatus=spawnedCharacter.status;for(auto& [key,name]:CharacterNames::All())if(OperatorRoster::Known(key))state.operatorRoster.push_back({key,OperatorRoster::Male(key),operatorWhitelist.Allows(key)});for(auto& pair:pairedAnimations.pairs){state.pairedIds.push_back(pair.id);state.pairedNames.push_back(pair.name);}auto pairMatch=DraftPair();state.selectedPair=pairMatch?pairMatch->id:std::string{};state.canCreatePair=!pairMatch&&DraftSourcesValid()&&operatorWhitelist.Allows(workflow.draft.target);state.pairRoleSupported=pairMatch&&pairMatch->variants.contains(workflow.draft.target);state.canAddPair=pairMatch&&DraftSourcesValid()&&operatorWhitelist.Allows(workflow.draft.target);state.spawnCharacterSelection=spawnedCharacter.selected;for(auto& [key,name]:CharacterNames::All())if(SpawnableCharacter(key))state.spawnCharacters.push_back(key);state.breastEnabled=breast.enabled;state.breastAutomatic=breast.automatic;state.breastAutomaticMain=breast.automaticMain;state.breastManual=breast.manual;state.breastStatus=breast.status;state.breastDiagnostic=BreastDiagnostics();for(auto& [key,p]:BreastDefaults().items())state.breastCharacters.push_back(key);state.partnerAnimationReuse=partnerAnimationReuse;state.partnerBindingMismatch=AnimationBindingMismatch(workflow.draft.animation,workflow.draft.target);state.mainBindingMismatch=AnimationBindingMismatch(workflow.draft.controlledAnimation,lastControlled);for(auto& p:externalCatalog){std::string line=p.value("name",std::string{})+" · "+p.value("backend",std::string{})+" · "+p.value("status",std::string{});state.externalModels.push_back(line);}state.freeCameraHideUi=freeCamera.hideUi;state.freeCameraEnabled=freeCamera.enabled||freeCamera.request==1;state.freeCameraHotkey=FreeCameraInput::hotkey;state.freeCameraStatus=freeCamera.status;state.animationImportFolders=animationImportFolders;state.syncAnimations=syncAnimations;state.externalFolder=externalFolder;state.externalReloadKey=efmiScan.reloadKey;int externalIndex=0;for(auto& m:efmiScan.mods){InteractionPanel::ExternalMod mod;mod.name=m.name;mod.file=EfmiBridge::Utf8(m.file);for(auto& c:m.controls)mod.controls.push_back({externalIndex++,mod.file+"|"+c.binding,c.name,c.binding,c.low,c.high,c.value,c.integer,c.dirty});for(auto& mesh:m.meshes){mod.meshes.push_back(mesh.name+(mesh.condition.empty()?"":" · "+mesh.condition));state.externalMeshes.push_back({int(state.externalMeshes.size()),EfmiBridge::Utf8(m.file)+"|"+mesh.name,EfmiBridge::Utf8(m.file),EfmiBridge::MeshLabel(mesh.name),mesh.reason,mesh.supported,mesh.values});}state.externalMods.push_back(std::move(mod));}for(auto& e:efmiScan.errors)state.externalErrors.push_back(e);auto timeline=TimelineJson();state.timelineTime=timeline["time"];state.timelineDuration=timeline["duration"];state.rangeStart=timeline["start"];state.rangeEnd=timeline["end"];state.rangeLoop=timeline["loop"];state.timelineActive=timeline["active"];state.clipPaused=timeline["paused"];state.playbackTime=state.timelineDuration>0?std::to_string(state.timelineTime)+" / "+std::to_string(state.timelineDuration)+(state.clipPaused?" 秒 · 暫停":" 秒 · 播放中"):"未選擇匯入動畫";auto mainTimeline=TimelineJson(true);state.mainTime=mainTimeline["time"];state.mainDuration=mainTimeline["duration"];state.mainStart=mainTimeline["start"];state.mainEnd=mainTimeline["end"];state.mainRangeLoop=mainTimeline["loop"];state.mainActive=mainTimeline["active"];state.mainPaused=mainTimeline["paused"];state.mainLoop=controlledLoop;state.mainSupport=controlledSupport;state.mainAnimation=workflow.draft.controlledAnimation;state.loopEnabled=calibrationLoop;state.blenderFolder=BlenderDisplayFolder();state.supportMode=supportTarget;state.fbxAction=fbxManagerAction;state.scaleAvailable=methods[LocalScale].resolved.method_info&&methods[SetLocalScale].resolved.method_info;for(auto& b:boneCatalog)state.bones.push_back({b.key,b.name,b.group,b.actor,boneTarget.Get(b.key)});state.connected=hook!=0;state.calibration=calibrationMode;state.hotkeys=presetBank.enabled;state.active=pose.pins?activePreset:-1;state.grip=gripTarget.values;for(auto& key:animationOrder){state.animations.push_back("clip:"+key);state.animationNames.push_back(animationLibrary.at(key)->name);state.animationActors.push_back(animationLibrary.at(key)->targetActor);}state.controlled=Presets::Administrator(lastControlled)?lastControlled:std::string{};state.draftTarget=workflow.draft.target;state.draftAnimation=workflow.draft.animation;state.prepared=workflow.ready;state.exportPath=lastExportPath;if(workflow.ready)state.exportJson=Workflow::Export(workflow.prepared).dump(2);state.status=panelStatus;const std::map<std::string,std::string> labels{{"paired_animation_missing","配對動畫不存在，請重新指定快捷鍵"},{"preset_partner_reuse_disabled","請勾選啟用角色動畫互用，或選擇此設定的校準角色"},{"controlled_animation_missing","主控動畫缺失，請先導入或選擇有效的主控動畫"},{"support_bone_missing","互動角色缺少所選支點骨架，請更新全部骨架或選不固定"},{"support_update_failed","支撐更新失敗，動畫已停止，請查看日誌"},{"preview_start_failed_check_log","播放啟動失敗，請查看模組日誌"},{"configured_bone_missing","設定中的骨架不存在，請更新骨架或還原預設"},{"bone_catalog_too_large","骨架掃描超過上限，無法啟動"},{"off","互動已停止並還原"},{"off_restoration_unverified","已停止，還原未確認"},{"handshake_preview_on","握手正在執行"},{"standing_preview_on","站位正在執行"},{"mutual_lookat_on","雙向對視正在執行"},{"lookat_on","LookAt 正在執行"},{"contact_unreachable","手臂無法觸及，互動已停止"},{"preset_target_missing_or_ambiguous","找不到預設互動角色"},{"preset_controlled_character_mismatch","主控與預設不符，請切換對應管理員"}};auto status=labels.find(panelStatus);if(status!=labels.end())state.status=status->second;for(int i=0;i<9;++i){auto& p=presetBank.slots[i];state.slots[i]={p.enabled,p.name,p.target,p.animation,p.controlledAnimation,p.controlledPose=="imported",p.pairId};}for(auto& [identity,name]:CharacterNames::All())if(operatorWhitelist.Allows(identity))state.targets.push_back(identity);return state;}
+InteractionPanel::Snapshot PanelRead(){std::lock_guard lock(gate);InteractionPanel::Snapshot state;state.spawnCharacterStatus=spawnedCharacter.status;for(auto& [key,name]:CharacterNames::All())if(OperatorRoster::Known(key))state.operatorRoster.push_back({key,OperatorRoster::Male(key),operatorWhitelist.Allows(key)});for(auto& pair:pairedAnimations.pairs){state.pairedIds.push_back(pair.id);state.pairedNames.push_back(pair.name);}auto pairMatch=DraftPair();state.selectedPair=pairMatch?pairMatch->id:std::string{};state.canCreatePair=!pairMatch&&DraftSourcesValid()&&operatorWhitelist.Allows(workflow.draft.target);state.pairRoleSupported=pairMatch&&pairMatch->variants.contains(workflow.draft.target);state.canAddPair=pairMatch&&DraftSourcesValid()&&operatorWhitelist.Allows(workflow.draft.target);state.spawnCharacterSelection=spawnedCharacter.selected;for(auto& [key,name]:CharacterNames::All())if(SpawnableCharacter(key))state.spawnCharacters.push_back(key);state.breastEnabled=breast.enabled;state.breastAutomatic=breast.automatic;state.breastAutomaticMain=breast.automaticMain;state.breastManual=breast.manual;state.breastStatus=breast.status;state.breastDiagnostic=BreastDiagnostics();for(auto& [key,p]:BreastDefaults().items())state.breastCharacters.push_back(key);state.partnerAnimationReuse=partnerAnimationReuse;state.partnerBindingMismatch=AnimationBindingMismatch(workflow.draft.animation,workflow.draft.target);state.mainBindingMismatch=AnimationBindingMismatch(workflow.draft.controlledAnimation,lastControlled);for(auto& p:externalCatalog){std::string line=p.value("name",std::string{})+" · "+p.value("backend",std::string{})+" · "+p.value("status",std::string{});state.externalModels.push_back(line);}state.freeCameraHideUi=freeCamera.hideUi;state.freeCameraEnabled=freeCamera.enabled||freeCamera.request==1;state.freeCameraHotkey=FreeCameraInput::hotkey;state.freeCameraStatus=freeCamera.status;state.animationImportFolders=animationImportFolders;state.syncAnimations=syncAnimations;state.attachmentTarget=static_cast<int>(mouthContact.target);state.mouthContactStatus=mouthContact.status;state.externalReloadKey=efmiScan.reloadKey;int externalIndex=0;for(auto& m:efmiScan.mods){InteractionPanel::ExternalMod mod;mod.name=m.name;mod.file=EfmiBridge::Utf8(m.file);for(auto& c:m.controls)mod.controls.push_back({externalIndex++,mod.file+"|"+c.binding,c.name,c.binding,c.low,c.high,c.value,c.integer,c.dirty});for(auto& mesh:m.meshes){mod.meshes.push_back(mesh.name+(mesh.condition.empty()?"":" · "+mesh.condition));state.externalMeshes.push_back({int(state.externalMeshes.size()),EfmiBridge::Utf8(m.file)+"|"+mesh.name,EfmiBridge::Utf8(m.file),EfmiBridge::MeshLabel(mesh.name),mesh.reason,mesh.supported,mesh.values});}state.externalMods.push_back(std::move(mod));}for(auto& e:efmiScan.errors)state.externalErrors.push_back(e);auto timeline=TimelineJson();state.timelineTime=timeline["time"];state.timelineDuration=timeline["duration"];state.rangeStart=timeline["start"];state.rangeEnd=timeline["end"];state.rangeLoop=timeline["loop"];state.timelineActive=timeline["active"];state.clipPaused=timeline["paused"];state.playbackTime=state.timelineDuration>0?std::to_string(state.timelineTime)+" / "+std::to_string(state.timelineDuration)+(state.clipPaused?" 秒 · 暫停":" 秒 · 播放中"):"未選擇匯入動畫";auto mainTimeline=TimelineJson(true);state.mainTime=mainTimeline["time"];state.mainDuration=mainTimeline["duration"];state.mainStart=mainTimeline["start"];state.mainEnd=mainTimeline["end"];state.mainRangeLoop=mainTimeline["loop"];state.mainActive=mainTimeline["active"];state.mainPaused=mainTimeline["paused"];state.mainLoop=controlledLoop;state.mainSupport=controlledSupport;state.mainAnimation=workflow.draft.controlledAnimation;state.loopEnabled=calibrationLoop;state.blenderFolder=BlenderDisplayFolder();state.supportMode=supportTarget;state.fbxAction=fbxManagerAction;state.scaleAvailable=methods[LocalScale].resolved.method_info&&methods[SetLocalScale].resolved.method_info;for(auto& b:boneCatalog)state.bones.push_back({b.key,b.name,b.group,b.actor,boneTarget.Get(b.key)});state.connected=hook!=0;state.calibration=calibrationMode;state.hotkeys=presetBank.enabled;state.active=pose.pins?activePreset:-1;state.grip=gripTarget.values;for(auto& key:animationOrder){state.animations.push_back("clip:"+key);state.animationNames.push_back(animationLibrary.at(key)->name);state.animationActors.push_back(animationLibrary.at(key)->targetActor);}state.controlled=Presets::Administrator(lastControlled)?lastControlled:std::string{};state.draftTarget=workflow.draft.target;state.draftAnimation=workflow.draft.animation;state.prepared=workflow.ready;state.exportPath=lastExportPath;if(workflow.ready)state.exportJson=Workflow::Export(workflow.prepared).dump(2);state.status=LiveMeshError();if(state.status.empty())state.status=panelStatus;const std::map<std::string,std::string> labels{{"paired_animation_missing","配對動畫不存在，請重新指定快捷鍵"},{"preset_partner_reuse_disabled","請勾選啟用角色動畫互用，或選擇此設定的校準角色"},{"controlled_animation_missing","主控動畫缺失，請先導入或選擇有效的主控動畫"},{"support_bone_missing","互動角色缺少所選支點骨架，請更新全部骨架或選不固定"},{"support_update_failed","支撐更新失敗，動畫已停止，請查看日誌"},{"preview_start_failed_check_log","播放啟動失敗，請查看模組日誌"},{"configured_bone_missing","設定中的骨架不存在，請更新骨架或還原預設"},{"bone_catalog_too_large","骨架掃描超過上限，無法啟動"},{"off","互動已停止並還原"},{"off_restoration_unverified","已停止，還原未確認"},{"handshake_preview_on","握手正在執行"},{"standing_preview_on","站位正在執行"},{"mutual_lookat_on","雙向對視正在執行"},{"lookat_on","LookAt 正在執行"},{"contact_unreachable","手臂無法觸及，互動已停止"},{"preset_target_missing_or_ambiguous","找不到預設互動角色"},{"preset_controlled_character_mismatch","主控與預設不符，請切換對應管理員"}};auto status=labels.find(panelStatus);if(status!=labels.end())state.status=status->second;for(int i=0;i<9;++i){auto& p=presetBank.slots[i];state.slots[i]={p.enabled,p.name,p.target,p.animation,p.controlledAnimation,p.controlledPose=="imported",p.pairId};}for(auto& [identity,name]:CharacterNames::All())if(operatorWhitelist.Allows(identity))state.targets.push_back(identity);return state;}
 void PanelExecute(InteractionPanel::Command command){std::lock_guard lock(gate);if(!active||!host)return;using A=InteractionPanel::Action;bool mainActor=InteractionPanel::MainAction(command.action);int index=command.index;bool bankChanged=false;try{
  switch(command.action){
  case A::FreeCameraToggle:if(!hook)freeCamera.status="請先手動連接遊戲入口";else freeCamera.request=freeCamera.enabled?0:1;if(freeCamera.request==1)freeCamera.status="等待遊戲更新啟用自由相機";break;
@@ -1086,13 +1250,16 @@ void PanelExecute(InteractionPanel::Command command){std::lock_guard lock(gate);
  case A::FreeCameraReset:if(freeCamera.enabled)freeCamera.reset=true;else freeCamera.status="請先啟用自由相機";break;
  case A::FreeCameraHotkey:if(FreeCamera::ValidHotkey(command.index)){FreeCameraInput::hotkey=command.index;FreeCameraInput::toggleRequests=0;SavePanelSettings();}break;
  case A::BlenderFolder:SetBlenderFolder(command.text);break;
- case A::NativeEfmiLoad:try{QueueNativeEfmi(command.text);}catch(const std::exception& e){nativeEfmi.status=e.what();}break;
- case A::NativeEfmiRestore:CancelNativeEfmi();break;
- case A::NativeEfmiInspect:try{QueueNativeEfmiInspection();}catch(const std::exception& e){nativeEfmi.status=e.what();}break;
- case A::NativeEfmiWeight:if(nativeEfmi.hasShape)SetNativeEfmiWeight(command.value);break;
- case A::ExternalFolder:case A::ExternalScan:try{ScanExternalFolder(command.text.empty()?externalFolder:command.text);}catch(const std::exception& e){panelStatus=e.what();}break;
+ case A::ExternalGet:case A::ExternalScan:try{if(command.action==A::ExternalScan||efmiScan.folder.empty())ScanExternalFolder();}catch(const std::exception& e){panelStatus=e.what();}break;
  case A::ExternalValue:if(!SetExternalValue(index,command.text,command.value))panelStatus="參數無效，請重新掃描";break;
  case A::ExternalMeshReset:if(!ResetExternalMesh(index,command.text))panelStatus="請重新掃描網格";break;
+ case A::AttachmentToggle:
+  if(command.index>0&&static_cast<size_t>(command.index)<MouthContact::AttachmentKeys.size()){
+   const auto target=static_cast<MouthContact::Attachment>(command.index);
+   try{SetMeshAttachment(target,mouthContact.target!=target);}
+   catch(const std::exception& e){mouthContact.status=e.what();}
+  }
+  break;
  case A::ExternalModReset:try{if(!ResetExternalMod(command.text))panelStatus="請重新掃描模組";}catch(const std::exception& e){panelStatus=e.what();}break;
  case A::ExternalMeshValue:if(!SetExternalMeshValue(index,command.text,int(command.extraValue),command.value,true))panelStatus="網格參數無效";break;
  case A::ExternalApply:try{WriteExternalBridge();}catch(const std::exception& e){panelStatus=e.what();}break;
@@ -1148,21 +1315,15 @@ void PanelExecute(InteractionPanel::Command command){std::lock_guard lock(gate);
 void BE_CALL Shutdown(){
  InteractionPanel::Stop();
  {
-  std::unique_lock lock(gate);armed=false;CancelFbxImport();freeCamera.request=0;if(freeCamera.enabled){restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !freeCamera.enabled;});if(freeCamera.enabled){freeCamera.enabled=false;freeCamera.pins.reset();freeCamera.status="自由相機已關閉";}}
-  CancelNativeEfmi();nativeEfmi.inspect=false;
-  if(nativeEfmi.pins){
-   restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !nativeEfmi.pins;});
-   if(nativeEfmi.pins){
-    Log("Native EFMI shutdown: no restoration tick; restart the game to restore the original mesh");
-    nativeEfmi.pins.reset();
-   }
-  }
-  nativeEfmi=NativeEfmiPreview{};
+  std::unique_lock lock(gate);armed=false;
+  delete liveExternalMesh;liveExternalMesh=nullptr;CancelFbxImport();freeCamera.request=0;if(freeCamera.enabled){restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !freeCamera.enabled;});if(freeCamera.enabled){freeCamera.enabled=false;freeCamera.pins.reset();freeCamera.status="自由相機已關閉";}}
   if(spawnedCharacter.object){spawnedCharacter.request=2;restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !spawnedCharacter.object;});if(spawnedCharacter.object){Log("Spawn shutdown: no Unity tick; visual will be removed when scene unloads");spawnedCharacter.pins.reset();spawnedCharacter.object=nullptr;}}
   breast.enabled=false;if(breast.pins){restoreRequested=true;restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !breast.pins;});if(breast.pins){breast.wrote=false;ClearBreast();Log("Breast physics shutdown: no Unity tick; game animator must restore pose");}}
+  mouthContact.target=MouthContact::Attachment::Off;
   if(pose.pins){restoreRequested=true;restored.wait_for(lock,std::chrono::milliseconds(300),[]{return !pose.pins;});
    if(pose.pins)StopPose("shutdown without Gameplay tick",false);
   }
+  mouthContact.wrote=false;ClearMouthBinding();
  }
  active=false;pending=false;movementPending=false;followPending=false;StopBreastHooks();
  if(host&&host->hooks){for(size_t i=0;i<cameraInputHookCount;++i)host->hooks->disable(host->hooks->context,cameraInputHooks[i].handle);cameraInputHookCount=0;cameraInputReady=false;}

@@ -33,6 +33,9 @@ jobs:
         run: cmake -S third_party/eml/src/native -B eml-build -A x64
       - name: Compile bundled EML runtime
         run: cmake --build eml-build --config Release
+      - uses: microsoft/setup-msbuild@v2
+      - name: Compile bundled XXMI runtime
+        run: python .github/scripts/build_xxmi.py --build-dir xxmi-build
       - name: Compile from source
         run: cmake --build build --config Release
       - name: Native regression tests
@@ -47,7 +50,9 @@ jobs:
           python tests/vmd_alias_tests.py
       - name: Package compiled runtime
         id: package
-        run: python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --eml-runtime eml-build/Release --output-dir "${{ runner.temp }}/eai-package"
+        run: |
+          $xxmi = Get-ChildItem xxmi-build -Directory | Select-Object -First 1
+          python .github/scripts/package.py --dll build/bin/Endfield.Interaction.dll --eml-runtime eml-build/Release --xxmi-dll "$($xxmi.FullName)/x64/Zip Release/d3d11.dll" --output-dir "${{ runner.temp }}/eai-package"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.filename }}

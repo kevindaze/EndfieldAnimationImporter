@@ -12,7 +12,24 @@ fs::path PackageRoot(){
  std::array<wchar_t,32768> path{};
  auto length=GetModuleFileNameW(nullptr,path.data(),static_cast<DWORD>(path.size()));
  if(!length||length>=path.size())throw std::runtime_error("無法讀取 EAI 程式路徑。");
- return fs::path(path.data()).parent_path();
+ return fs::canonical(fs::path(path.data()).parent_path());
+}
+
+fs::path StandaloneFolder(const fs::path& local,const fs::path& version,const fs::path& root){
+ const auto& path=root.native();
+ std::array<UCHAR,32> digest{};
+ BCRYPT_ALG_HANDLE algorithm=nullptr;
+ if(BCryptOpenAlgorithmProvider(&algorithm,BCRYPT_SHA256_ALGORITHM,nullptr,0)<0)
+  throw std::runtime_error("無法初始化獨立宿主索引。");
+ const auto status=BCryptHash(algorithm,nullptr,0,
+  reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(path.data())),
+  static_cast<ULONG>(path.size()*sizeof(wchar_t)),digest.data(),static_cast<ULONG>(digest.size()));
+ BCryptCloseAlgorithmProvider(algorithm,0);
+ if(status<0)throw std::runtime_error("無法辨識獨立宿主索引位置。");
+ constexpr wchar_t digits[]=L"0123456789abcdef";
+ std::wstring key;
+ for(auto byte:digest){key+=digits[byte>>4];key+=digits[byte&15];}
+ return local/L"BetterEndfield/Interaction/Standalone"/version/key;
 }
 
 std::string RandomHex(size_t count){
@@ -25,14 +42,13 @@ std::string RandomHex(size_t count){
  return result;
 }
 
-fs::path PrepareStandalone(const fs::path& game){
+fs::path PrepareStandalone(const fs::path& game,const fs::path& root,const fs::path& local){
  if(!IsGame(game))throw std::runtime_error("請選擇遊戲目錄中的 Endfield.exe。");
- const auto root=PackageRoot();
  const auto manifest=ReadJson(root/L"module.json",1048576);
  if(manifest.at("id")!=ModuleId)throw std::runtime_error("EAI 套件識別不符。");
  for(const auto& name:{L"runtime/EModLoader.Launcher.exe",L"runtime/EModLoader.Host.dll",L"native/windows-x64/Endfield.Interaction.dll"})
   if(!fs::is_regular_file(root/name))throw std::runtime_error("EAI 套件不完整，請重新完整解壓。");
- const auto folder=LocalData()/L"BetterEndfield"/L"Interaction"/L"Standalone"/Path(manifest.at("version").get<std::string>());
+ const auto folder=StandaloneFolder(local,Path(manifest.at("version").get<std::string>()),root);
  fs::create_directories(folder);
  const auto indexPath=folder/L"index.json";
  // An older EML proxy would direct the game into a different module library.
@@ -50,7 +66,7 @@ fs::path PrepareStandalone(const fs::path& game){
      index.at("modules").at(0).at("id")!=ModuleId)
    throw std::runtime_error("EAI 專用宿主設定無效。");
   if(index["modules"][0].at("directory")!=Utf8(root))
-   throw std::runtime_error("此版本已從另一個資料夾啟動，請使用原資料夾或關閉遊戲後還原 Standalone 設定。");
+   throw std::runtime_error("EAI 專用宿主索引的套件路徑不符。");
   return indexPath;
  }
  WSADATA winsock{};
@@ -90,7 +106,7 @@ public:
 };
 
 Json RunStandalone(HWND owner,const fs::path& game,const fs::path& official,bool elevated=false){
- const auto root=PackageRoot(),index=PrepareStandalone(game);
+ const auto root=PackageRoot(),index=PrepareStandalone(game,root,LocalData());
  const auto pipeName=L"EML.Launch."+Path(RandomHex(16)).wstring();
  const auto pipePath=L"\\\\.\\pipe\\"+pipeName;
  LaunchHandle pipe(CreateNamedPipeW(pipePath.c_str(),PIPE_ACCESS_INBOUND|FILE_FLAG_OVERLAPPED|FILE_FLAG_FIRST_PIPE_INSTANCE,

@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--dll', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--eml-runtime', type=Path, required=True)
+    parser.add_argument('--xxmi-dll', type=Path, required=True)
     args = parser.parse_args()
     manifest = json.loads((ROOT / 'module.json').read_text(encoding='utf-8-sig'))
     version = manifest['version']
@@ -59,8 +60,15 @@ def main():
     files['MINHOOK-LICENSE.txt'] = ROOT / 'third_party/eml/src/native/vendor/minhook/LICENSE.txt'
     efmi = ROOT / 'third_party/efmi'
     for path in efmi.rglob('*'):
-        if path.is_file():
+        if path.is_file() and path.name not in {'d3d11.dll', 'patch_live_buffers.py'}:
             files['runtime/efmi/' + path.relative_to(efmi).as_posix()] = path
+    xxmi = args.xxmi_dll.read_bytes()
+    xxmi_pe = struct.unpack_from('<I', xxmi, 60)[0] if len(xxmi) >= 64 else len(xxmi)
+    if (xxmi[:2] != b'MZ' or xxmi[xxmi_pe:xxmi_pe+6] != b'PE\0\0\x64\x86'
+            or '.eai-live-buffer'.encode('utf-16-le') not in xxmi
+            or b'EaiSubmitMeshFollow' not in xxmi):
+        raise SystemExit('Expected the compiled Windows x64 XXMI runtime with EAI live buffers')
+    files['runtime/efmi/d3d11.dll'] = args.xxmi_dll
     files['SECONDARY-BODYPHYSICS-LICENSE.txt'] = ROOT / 'third_party/secondary-bodyphysics/LICENSE'
     files['SECONDARY-BODYPHYSICS-NOTICE.md'] = ROOT / 'third_party/secondary-bodyphysics/NOTICE.md'
     motions = ROOT / 'native/windows-x64/motions'
@@ -96,10 +104,11 @@ def main():
     # Exclusive creation: repeated versions never overwrite earlier artifacts.
     with zipfile.ZipFile(archive, 'x', compression=zipfile.ZIP_DEFLATED) as z:
         z.writestr('mod/', b'')
+        z.writestr('runtime/efmi/EAI-LiveSidecars.txt', 'XXMI 1.2.2 with EAI Live Buffers\n')
         for name, path in sorted(files.items()):
             z.write(path, name)
     with zipfile.ZipFile(archive) as z:
-        if z.testzip() is not None or set(z.namelist()) != set(files) | {'mod/'}:
+        if z.testzip() is not None or set(z.namelist()) != set(files) | {'mod/', 'runtime/efmi/EAI-LiveSidecars.txt'}:
             raise SystemExit('Archive validation failed')
     print(archive)
     if os.environ.get('GITHUB_OUTPUT'):

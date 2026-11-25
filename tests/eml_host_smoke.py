@@ -43,12 +43,8 @@ try:
  assert reply('workflow_get','workflow')['result']==0
  assert reply('presets_get','presets')['result']==0
  before_mesh=settings.read_bytes()
- mesh=reply('native_efmi_get','mesh-state')
- assert mesh['result']==0 and not mesh['body']['shape'] and mesh['body']['weight']==0
+ assert reply('native_efmi_get','mesh-state')['result']!=0
  assert reply('native_efmi_load','mesh-offline',path='unused.json')['result']!=0
- assert reply('native_efmi_inspect','mesh-inspect-offline')['result']!=0
- assert reply('native_efmi_weight','mesh-weight-offline',weight=75)['result']!=0
- assert reply('native_efmi_restore','mesh-restore-offline')['result']==0
  assert settings.read_bytes()==before_mesh
  pairs=reply('paired_get','pairs');assert pairs['result']==0 and len(pairs['body']['paired']['items'])==1
  migrated=pairs['body']['preset_bank']['slots'];assert migrated[0]['pair_id']==migrated[1]['pair_id'] and migrated[0]['pair_id']

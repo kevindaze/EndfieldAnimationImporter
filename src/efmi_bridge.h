@@ -25,7 +25,7 @@ struct Control {std::string name,binding;float low=0,high=1,value=0;bool integer
 struct Resource {std::string name,file,format;int stride=0;};
 struct Mesh {std::string name,condition,section,resource,indexResource;uint64_t count=0,start=0;int64_t base=0;std::array<float,12> values{0,0,0,0,0,0,1,1,1,0,0,0};bool supported=false,dirty=false;std::string reason;};
 struct Mod {std::filesystem::path file;std::string name,space;std::vector<Control> controls;std::vector<Mesh> meshes;std::map<std::string,Resource> resources;};
-struct Scan {std::filesystem::path folder,efmiRoot;std::string reloadKey;std::vector<Mod> mods;std::vector<std::string> errors;};
+struct Scan {std::filesystem::path folder,efmiRoot;std::string reloadKey;std::vector<Mod> mods;std::vector<std::string> errors;std::filesystem::path bundledMods;};
 inline std::string ReadFile(const std::filesystem::path& file){if(std::filesystem::file_size(file)>8388608)throw std::runtime_error("INI exceeds 8 MB");std::ifstream f(file,std::ios::binary);if(!f)throw std::runtime_error("INI unreadable");return {std::istreambuf_iterator<char>(f),{}};}
 inline Mod Parse(const std::filesystem::path& file,const std::string& content,const std::filesystem::path& root){Mod mod;mod.file=file;mod.name=Utf8(file.parent_path().filename());std::istringstream stream(content);std::string line,section,comment,resource,indexResource;int pendingMesh=-1;std::vector<std::string> conditions;std::map<std::string,std::set<float>> numbers;std::set<std::string> meshes,continuous;
  std::regex declaration(R"(^global\s+persist\s+(\$[A-Za-z_][A-Za-z_0-9]*)\s*=\s*([-+0-9.eE]+)\s*$)",std::regex::icase),meshName(R"(\[mesh:([^\]]+)\])"),drawName(R"(^;\s*Draw\s+Component\s+(\d+)(?:\s+(.+))?$)",std::regex::icase),numberUse(R"((\$[A-Za-z_][A-Za-z_0-9]*)\s*(?:==|>=|<=|>|<|=)\s*([-+0-9.eE]+))");
@@ -44,18 +44,40 @@ inline Mod Parse(const std::filesystem::path& file,const std::string& content,co
  for(auto it=std::sregex_iterator(line.begin(),line.end(),numberUse);it!=std::sregex_iterator();++it){try{float value=std::stof((*it)[2]);if(std::isfinite(value))numbers[(*it)[1]].insert(value);}catch(...){}}
  }
  for(auto& c:mod.controls){auto& n=numbers[c.binding];c.low=*n.begin();c.high=*n.rbegin();if(c.low==c.high){c.low=std::min(0.f,c.value);c.high=std::max(1.f,c.value);}c.integer=!continuous.contains(c.binding)&&std::all_of(n.begin(),n.end(),[](float v){return std::floor(v)==v;});}
- if(mod.space.empty()&&!root.empty()){std::error_code ec;auto relative=std::filesystem::relative(file,root,ec);if(!ec&&!relative.empty()&&!Utf8(relative).starts_with("..")){mod.space=Utf8(relative);std::replace(mod.space.begin(),mod.space.end(),'/','\\');}}
+ if(mod.space.empty()&&!root.empty()){
+  auto relative=file.lexically_relative(root);
+  auto bundledRelative=file.lexically_relative((root/"../../mod").lexically_normal());
+  const bool bundled=root.filename()=="efmi"&&root.parent_path().filename()=="runtime"
+   &&!bundledRelative.empty()&&*bundledRelative.begin()!="..";
+  if(!relative.empty()&&(*relative.begin()!=".."||bundled)){
+   mod.space=Utf8(relative);
+   std::replace(mod.space.begin(),mod.space.end(),'/','\\');
+  }
+ }
  // Missing exported mesh names: retain resource sections as unidentified components.
  if(mod.meshes.empty()){std::istringstream in(content);while(std::getline(in,line)){line=Trim(line);if(line.starts_with("[Resource")&&line.find("Position")!=line.npos)mod.meshes.push_back({line,"","",line});}}
  return mod;}
-inline Scan Discover(const std::filesystem::path& requested){Scan result;result.folder=std::filesystem::weakly_canonical(requested);if(!std::filesystem::is_directory(result.folder))throw std::runtime_error("Selected folder does not exist");for(auto p=result.folder;!p.empty();){if(std::filesystem::is_regular_file(p/"d3dx.ini")){result.efmiRoot=p;auto text=ReadFile(p/"d3dx.ini");std::smatch m;if(std::regex_search(text,m,std::regex(R"((?:^|\n)\s*reload_config\s*=\s*([^\r\n;]+))")))result.reloadKey=Trim(m[1]);break;}auto parent=p.parent_path();if(parent==p)break;p=parent;}
+inline Scan Discover(const std::filesystem::path& requested){Scan result;result.folder=std::filesystem::weakly_canonical(requested);if(!std::filesystem::is_directory(result.folder))throw std::runtime_error("Selected folder does not exist");for(auto p=result.folder;!p.empty();){
+  auto bundled=p.parent_path()/"runtime"/"efmi";
+  if(Lower(Utf8(p.filename()))=="mod"&&std::filesystem::is_regular_file(bundled/"d3dx.ini")){
+   result.efmiRoot=std::filesystem::weakly_canonical(bundled);
+   result.bundledMods=p;
+   break;
+  }
+  if(std::filesystem::is_regular_file(p/"d3dx.ini")){result.efmiRoot=p;break;}
+  auto parent=p.parent_path();if(parent==p)break;p=parent;
+ }
+ if(!result.efmiRoot.empty()){
+  auto text=ReadFile(result.efmiRoot/"d3dx.ini");std::smatch m;
+  if(std::regex_search(text,m,std::regex(R"((?:^|\n)\s*reload_config\s*=\s*([^\r\n;]+))")))result.reloadKey=Trim(m[1]);
+ }
  std::error_code ec;int files=0;std::vector<std::filesystem::path> paths;
  for(auto it=std::filesystem::recursive_directory_iterator(result.folder,std::filesystem::directory_options::skip_permission_denied,ec);it!=std::filesystem::recursive_directory_iterator();it.increment(ec)){if(ec){result.errors.push_back(ec.message());ec.clear();continue;}if(it.depth()>12||it->is_symlink()||(Lower(Utf8(it->path().filename())).starts_with("disabled")||Lower(Utf8(it->path().filename())).starts_with("bem.generated"))){if(it->is_directory())it.disable_recursion_pending();continue;}if(++files>12000)throw std::runtime_error("Too many files; select a smaller mod folder");if(Lower(Utf8(it->path().extension()))==".ini"&&!Lower(Utf8(it->path().filename())).starts_with("bem.external"))paths.push_back(it->path());}
  std::sort(paths.begin(),paths.end());for(auto& file:paths){try{auto mod=Parse(file,ReadFile(file),result.efmiRoot);if(!mod.controls.empty()||!mod.meshes.empty())result.mods.push_back(std::move(mod));}catch(const std::exception& e){result.errors.push_back(Utf8(file.filename())+": "+e.what());}}
  return result;}
-inline std::filesystem::path OutputPath(const Scan& scan){if(scan.efmiRoot.empty())throw std::runtime_error("Cannot locate EFMI d3dx.ini");auto root=scan.efmiRoot/"Mods";auto path=scan.folder/"BEM.ExternalControls.ini";auto relative=path.lexically_relative(root);if(relative.empty()||Utf8(relative).starts_with(".."))throw std::runtime_error("Bridge must be inside EFMI Mods");return path;}
+inline std::filesystem::path OutputPath(const Scan& scan){if(scan.efmiRoot.empty())throw std::runtime_error("Cannot locate EFMI d3dx.ini");auto root=scan.bundledMods.empty()?scan.efmiRoot/"Mods":scan.bundledMods;auto path=scan.folder/"BEM.ExternalControls.ini";auto relative=path.lexically_relative(root);if(relative.empty()||*relative.begin()=="..")throw std::runtime_error("Bridge must be inside the EFMI mod directory");return path;}
 inline constexpr char Marker[]="; BEM EXTERNAL CONTROLS v1";
-inline std::string Generate(const Scan& scan){std::ostringstream out;out.imbue(std::locale::classic());out<<Marker<<"\n; Generated by BEM. Original mod files are unchanged.\n; Reload EFMI configuration to apply.\nnamespace = BEMExternalControls\n\n[Constants]\n";int count=0;
+inline std::string Generate(const Scan& scan){std::ostringstream out;out.imbue(std::locale::classic());out<<Marker<<"\n; Generated by BEM. Original mod files are unchanged.\n; Reload EFMI configuration to apply.\n\n[Constants]\n";int count=0;
  for(auto& mod:scan.mods){if(mod.space.empty()||mod.space.find_first_of("\r\n[];=$")!=mod.space.npos)throw std::runtime_error("Invalid EFMI namespace");auto fresh=Parse(mod.file,ReadFile(mod.file),scan.efmiRoot);if(fresh.space!=mod.space)throw std::runtime_error("Mod namespace changed; scan again");for(auto& c:mod.controls)if(c.dirty){if(!Variable(c.binding)||!std::isfinite(c.value)||c.value<c.low||c.value>c.high||(c.integer&&std::floor(c.value)!=c.value))throw std::runtime_error("Invalid external parameter");if(std::none_of(fresh.controls.begin(),fresh.controls.end(),[&](auto& f){return f.binding==c.binding;}))throw std::runtime_error("Mod parameter changed; scan again");out<<"post $\\"<<mod.space<<"\\"<<c.binding.substr(1)<<" = "<<std::setprecision(9)<<c.value<<"\n";++count;}}
  if(!count)throw std::runtime_error("Adjust a parameter before writing bridge");return out.str();}
 inline void Owned(const std::filesystem::path& path){if(std::filesystem::exists(path)&&!ReadFile(path).starts_with(Marker))throw std::runtime_error("Bridge filename is occupied by another file");}

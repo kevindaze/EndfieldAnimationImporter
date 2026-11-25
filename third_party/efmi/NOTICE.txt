@@ -12,6 +12,10 @@ EAI configuration changes:
 - Game launch is handled by EAI instead of an INI-embedded executable path.
 - The bundled startup guide uses EAI's mod-folder workflow.
 - Community promotion links are removed from the guide and update/error prompts.
+- d3d11.dll is rebuilt from XXMI 1.2.2. It refreshes fixed-size mesh buffers,
+  accepts transient position updates, and previews changes to loaded persistent
+  INI variables on the rendering thread. The source changes are in
+  patch_live_buffers.py and the build is scripted in .github/scripts/build_xxmi.py.
 
 The EAI source archive includes upstream source tarballs in
 third_party/appearance-sources and the local configuration/core snapshot here.

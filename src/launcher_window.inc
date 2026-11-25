@@ -70,7 +70,7 @@ struct LauncherWindow {
  void RefreshLog(){
   std::wstring combined=messages;
   try{
-   const auto directory=LocalData()/L"BetterEndfield/Interaction/Standalone"/EAI_VERSION_W;
+   static const auto directory=StandaloneFolder(LocalData(),EAI_VERSION_W,PackageRoot());
    for(auto name:{L"launch.log",L"host.log"}){
    const auto file=directory/name;
    if(fs::is_regular_file(file)){
@@ -106,7 +106,7 @@ struct LauncherWindow {
     throw std::runtime_error("Windows 無法開啟 mod 資料夾。");
   }else if(id==OpenData||id==OpenLog){
    auto directory=LocalData()/L"BetterEndfield/Interaction";
-   if(id==OpenLog)directory/=fs::path(L"Standalone")/EAI_VERSION_W;
+   if(id==OpenLog)directory=StandaloneFolder(LocalData(),EAI_VERSION_W,PackageRoot());
    fs::create_directories(directory);
    if(reinterpret_cast<INT_PTR>(ShellExecuteW(window,L"open",directory.c_str(),nullptr,nullptr,SW_SHOWNORMAL))<=32)
     throw std::runtime_error("Windows 無法開啟資料夾。");

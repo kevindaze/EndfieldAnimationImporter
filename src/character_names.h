@@ -36,5 +36,7 @@ namespace CharacterNames {inline const std::map<std::string,std::string>& All(){
 {"chr_0035_liino","梨诺"},
 {"chr_0036_jsspsi","祀"},
 {"chr_0038_purrche","噗切娜"},
+{"chr_0039_mimino","米米諾"},
+{"chr_0040_sweetpie","小刻"},
 {"chr_9000_endmin","管理员"}
 };return names;}inline std::string Name(const std::string& id){const auto& names=All();auto it=names.find(id);return it==names.end()?(id.empty()?"未辨識角色":id):it->second;}}

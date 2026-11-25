@@ -1,10 +1,10 @@
 # EndfieldAnimationImporter User Guide
 
-> **Loader:** Version 1.4.0 and earlier use [BEM 3.4.3](https://github.com/Dr-hydra/Better-Endfield); version 1.5.0 onward uses [EML](https://github.com/Dr-hydra/Endfield-Mod-Loader).
+> **Standalone launch:** Version 3.4.1 bundles the game host and EFMI appearance loader. No separate EML or XXMI Launcher installation is required. Extract the full package, open EAI.Launcher.exe, and select the game.
 
 [繁體中文](README.md) | English
 
-Version: 3.0.0 · Windows x64
+Version: 3.4.1 · Windows x64
 
 ## Before You Start
 
@@ -21,7 +21,7 @@ Version: 3.0.0 · Windows x64
 
 Extract the full ZIP to a stable folder, open `EAI.Launcher.exe`, select the game's `Endfield.exe`, and click Launch Game. The package includes the launcher, game host, IL2CPP interfaces, hook service, messaging, and logs. The host enables EAI automatically. In a playable scene, press Num0 and manually connect the game entry point.
 
-The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.0.0/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
+The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. You can rename or move the package folder. On the next launch, EAI creates a host index for the current location. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.4.1/<package-path-hash>/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
 
 
 ## Quick Start
@@ -140,11 +140,19 @@ Enable **Enable Partner Breast Physics** on the **Breast Physics** page.
 
 ## EFMI External Model Adjustments
 
-Install EFMI and the appearance mod separately.
+1. Launch with EAI and open **External Model Adjustments** in the Num0 or web panel. EAI scans the `mod` folder next to the launcher. Click **Rescan** after adding or removing appearances.
+2. Under **External Model Adjustments → Mesh Transform**, drag a supported part's scale, rotation, position, or pivot slider. You can switch parts at any time. Bundled EFMI applies changes live and saves them automatically.
+3. To restore a part, use its mesh reset button. To disable all mesh adjustments in the scanned folder, click **Disable Bridge**.
 
-Choose EFMI's `Mods` folder or one mod folder → scan → adjust parameters/mesh → write the bridge → reload EFMI in-game. The reload key is usually F10; follow the panel's indication.
+Drag sliders under **Available Parameters** to preview native INI variables loaded by bundled EFMI. Use **Write Bridge** to save an override in the bridge. Reload EFMI with F10 when a parameter cannot be previewed or after disabling a loaded legacy bridge.
 
-Reload after restoring defaults or disabling the bridge too. Mesh changes are not applied live.
+### Mouth Contact (Experimental)
+
+Enable **Mouth Contact** under **External Model Adjustments** in the Num0 or web panel. It starts off each session. Use the male Endministrator with an EFMI appearance containing `Component 9 / dih` or `Component 9 / weap`, connect to the game, and play a paired animation.
+
+When the DIH approaches the mouth from the front, the entire part rotates around its base and the tip aims at the entrance along a fixed-length arc. Once the DIH mesh touches the lip contact box, its thickness perpendicular to the shaft and the existing opening determine the extra jaw rotation or opening blend shape. Aiming uses the insertion depth of the current pose. The feature uses the poses produced by MMD playback.
+
+The same panel also offers Pelvic Contact, Left-Hand Contact, and Right-Hand Contact. Select one contact target at a time. All contact options start disabled. The new targets use the partner’s bones to estimate the contact point. Pelvic Contact aims the DIH axis at the pelvic anchor within 1.3 times the mesh length from the pivot. The mesh keeps its original length. Hand Contact turns the tip toward the palm. The rotation eases back when the target moves out of reach.
 
 ## Complete EFMI Appearance Mods
 
@@ -164,31 +172,6 @@ When enabled INI files are present, Launch Game also starts the bundled EFMI 1.4
 
 The launcher displays the number of discoverable INI files. To disable an appearance, close the game and rename its directory to `DISABLED_originalName`. In-game reload follows EFMI's F10 configuration. Multiple appearances for one character can conflict. The released `mod` folder is initially empty.
 
-## EFMI Mesh Preview (Experimental)
-
-EAI can read one EFMI draw range and temporarily replace the mesh on a selected character's Unity renderer. Disable the EFMI override for the same part, enter a playable scene, and connect the game entry point. Under **External Model Adjustments → EFMI Mesh Preview (Experimental)**, click **Log Character Renderers and Bones** and copy the character ID, renderer name, and bone name from the EML log.
-
-Create the following JSON and replace the example values with your file and binding. Select it with **Load EFMI Mesh Profile** in the game panel, or enter its full path in the web panel and click the same button.
-
-```json
-{
-  "format": "eai-efmi-component",
-  "version": 1,
-  "ini": "path/to/mod.ini",
-  "actor": 0,
-  "character": "chr_0002_endminm",
-  "draw": "Component 0 / partName",
-  "renderer": "rendererName",
-  "bone": "boneName",
-  "preview_shape_scale": [1.05, 1.0, 1.0]
-}
-```
-
-- Use an absolute `ini` path or one relative to the JSON. Set `actor` to 0 for the controlled character or 1 for the current partner. Set `draw` to the original scan label derived from the `; Draw Component N name` comment.
-- The preview uses the material and bind pose of an existing single-submesh renderer and binds the whole part to one bone. It supports file-backed float3 positions and 16- or 32-bit indices. For a confirmed float2 UV stream, specify the resource name and byte offset with `"uv_resource": "Resource_Component0_VB1"` and `"uv_offset": 0`.
-- `preview_shape_scale` tests the slider with per-axis scale factors between 0.5 and 1.5. For a supported single-slot position shape, remove that option and set `"packed_position_shape": true` to read the `_merged_map.buf` and `_merged_packed_pos_delta.buf` files beside the position buffer.
-- Click **Restore Original Mesh / Cancel Preview** and let the game update. The preview does not save settings. Full material replacement, multi-bone weights, LODs, INI conditions, and external effects still use EFMI.
-
 ## Spawn Character
 
 In the rightmost **Spawn Character** tab, the whitelist groups female and male operators. All are enabled by default. Uncheck unwanted operators and press **Save Whitelist**; only checked operators appear in the spawn and partner selectors.
@@ -203,7 +186,7 @@ The menu lists currently known operators. Loading depends on resources available
 
 | Problem | Cause and solution |
 | --- | --- |
-| Panel is missing | Enable EAI in EML and launch the game through EML; restart after updating |
+| Panel is missing | Extract the full package and launch with EAI.Launcher.exe. Enter a playable scene and press Num0. Restart the game after updating |
 | Cannot connect | The game is not ready, another camera module occupies the entry, or versions are incompatible; retry in a playable scene, disable other camera modules, and restart |
 | Blender is not found | Choose the folder containing `blender.exe` manually |
 | Import asks you to stop | An animation or calibration preview is active; stop it first |
@@ -217,7 +200,7 @@ The menu lists currently known operators. Loading depends on resources available
 | Paired animation has a missing source | Import the referenced animation JSON first |
 | EFMI changes do not appear | The bridge has not been written/reloaded, or the mesh is unsupported |
 
-If the problem persists, provide EAI/EML versions, characters, animation filename, steps, and screenshots. Check EML logs or `Interaction.Diagnostics.log` beside the DLL.
+If the problem persists, provide the EAI version, characters, animation filename, steps, and screenshots. Use Open Log Folder in the launcher's sidebar to find `launch.log` and `host.log`. Native diagnostics are at `native/windows-x64/Interaction.Diagnostics.log`.
 
 To back up settings and animations, copy the entire `%LOCALAPPDATA%\BetterEndfield\Interaction` folder.
 

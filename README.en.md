@@ -1,16 +1,17 @@
 # EndfieldAnimationImporter User Guide
 
-> **Standalone launch:** Version 3.5.3 bundles the game host and EFMI appearance loader. No separate EML or XXMI Launcher installation is required. Extract the full package, open EAI.Launcher.exe, and select the game.
+> **Standalone launch** EAI includes its own game host and EFMI loader. Start the game with `EAI.Launcher.exe` from the extracted package.
 
 [繁體中文](README.md) | English
 
-Version: 3.5.3 · Windows x64
+Version: 3.6.5 · Windows x64
 
 ## Before You Start
 
-- Extract the EAI package. Importing FBX/VMD also requires [Blender](https://www.blender.org/download/) 4.2 or later.
+- Extract the EAI package. The native importer handles FBX and VMD directly. The Blender option requires [Blender](https://www.blender.org/download/) 4.2 or later.
 - Control the male or female Endministrator. Partners can be selected from the whitelist and are spawned automatically when outside the squad.
 - Disable other first-person/camera modules before starting the game.
+- EAI suppresses near-camera character fading by default.
 
 1. Extract the full EAI ZIP, open EAI.Launcher.exe, select the game, and launch it. Restart the game after updating.
 2. Enter a playable scene and press **Num0** to open the panel.
@@ -19,9 +20,12 @@ Version: 3.5.3 · Windows x64
 
 ### EAI Standalone Launcher
 
-Extract the full ZIP to a stable folder, open `EAI.Launcher.exe`, select the game's `Endfield.exe`, and click Launch Game. The package includes the launcher, game host, IL2CPP interfaces, hook service, messaging, and logs. The host enables EAI automatically. In a playable scene, press Num0 and manually connect the game entry point.
+- **Browse** to select `Endfield.exe` in your game folder, then click **Launch Game**. The launcher remembers the path.
+- **Language** Switch between Traditional Chinese and English in the sidebar. The launcher, in-game panel and web panel use this saved preference.
+- **Appearance Mod Guide** The guide opens once, the first time you start the launcher with this feature. Click the X in the title bar to close it, or reopen it from the sidebar.
+- **Launch troubleshooting** Check the launch and host logs below the controls, or click **Open Logs**. Windows may ask for approval when the game requires administrator privileges.
 
-The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. You can rename or move the package folder. On the next launch, EAI creates a host index for the current location. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.5.3/<package-path-hash>/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
+If you installed EML DLL autostart, uninstall it from EML before launching through EAI. EAI stores settings and animations in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
 
 
 ## Quick Start
@@ -38,11 +42,11 @@ flowchart TD
 ## Import Animations
 
 1. Stop the current animation and check your Endministrator and partner.
-2. Open **Animation Import** and check the Blender path. If it is missing, choose the folder containing `blender.exe`.
+2. Under **Animation Import**, set **Import Engine** to EAI or Blender. Your selection is saved and defaults to Blender. With Blender selected, choose the folder containing `blender.exe` if detection fails.
 3. Use **Import Controlled FBX / VMD** or **Import Partner FBX / VMD**, select a file, and wait for completion.
 4. Select the animation in the corresponding calibration menu. Importing does not automatically start playback.
 
-VMD needs no MMD reference model; only motion is imported. **Not all FBX skeletons are supported. Only single-character animations are supported.** Import each character's motion separately for a two-person animation.
+VMD imports motion without requiring an MMD reference model. Native EAI handles common humanoid FBX skeletons. Import each actor separately for paired animations. VMD leg IK may differ between engines. Select Blender to reproduce its original leg motion.
 
 Controlled animations are bound to the male or female Endministrator used during import. If a partner animation looks incorrect on another character, select that character and reimport.
 
@@ -154,15 +158,15 @@ When the DIH approaches the mouth from the front, the entire part rotates around
 
 The same panel also offers Pelvic Contact, Left-Hand Contact, and Right-Hand Contact. Select one contact target at a time. All contact options start disabled. The new targets use the partner’s bones to estimate the contact point. Pelvic Contact aims the DIH axis at the pelvic anchor within 1.3 times the mesh length from the pivot. The mesh keeps its original length. Hand Contact turns the tip toward the palm. The rotation eases back when the target moves out of reach.
 
-During paired animation playback, the mouth contact sound loops while the meshes touch and stops on separation. Pelvic Contact plays a short sound as the anchor enters the DIH root contact region and rearms after separation. Both sounds are included with EAI.
+During paired animation playback, the mouth contact sound loops while the meshes touch and stops on separation. Pelvic Contact plays a short sound as the default anchor enters the DIH root contact region and rearms after separation. The sliders move the attachment point independently. Both sounds are included with EAI.
 
 The appearance catalog and mesh probe results are cached in the local EAI data directory. Opening the page for the first time builds the cache. Later scans reuse unchanged appearances and refresh changed files.
 
-Under Pelvic Contact, adjust the fore-aft offset (−5 to +5 cm, with positive values moving forward) and impact volume (0–100%). The sliders save on release. Set the impact volume to 0% to mute the sound.
+Each contact mode has separate X, Y and Z offsets. X ranges from −5 to +5 cm, and Y and Z range from −10 to +10 cm. X moves sideways, Y moves up or toward the fingertips, and Z moves along the opening or palm normal. The offsets follow the partner’s bones, update live and save on release. Moving a slider shows a green point in the game view. It disappears five seconds after the last adjustment. Pelvic Contact also has a 0–100% impact volume slider.
 
 ## Complete EFMI Appearance Mods
 
-Extract the full EAI ZIP. Its `mod` folder is beside `EAI.Launcher.exe`. Extract each EFMI appearance into its own subfolder, keeping its INI, Meshes, Textures, shaders, and dependencies in their original relative structure. The sidebar's **Open mod Folder** button opens this location.
+Click **Open mod Folder** in the launcher sidebar. Extract each EFMI appearance into its own subfolder and keep its INI, meshes, textures, shaders and other dependencies in their original structure.
 
 ```text
 EAI.Launcher.exe

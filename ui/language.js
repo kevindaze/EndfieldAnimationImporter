@@ -31,10 +31,20 @@
   observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','aria-label','title']});
  }
  const observer=new MutationObserver(refresh);
- select.addEventListener('change',()=>{
-  language=select.value==='en'?'en':'zh-TW';
+ function applyLanguage(value){
+  language=value==='en'?'en':'zh-TW';
+  select.value=language;
   try{localStorage.setItem('eai.language',language)}catch{}
   refresh();
+ }
+ let edited=false;
+ select.addEventListener('change',()=>{
+  edited=true;
+  applyLanguage(select.value);
+  if(typeof send==='function')send('ui_language_set',{language}).catch(()=>{});
  });
  refresh();
+ if(typeof send==='function')send('ui_language_get').then(reply=>{
+  if(!edited&&(reply?.language==='en'||reply?.language==='zh-TW'))applyLanguage(reply.language);
+ }).catch(()=>{});
 })();

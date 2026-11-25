@@ -8,6 +8,7 @@ struct MouthRuntime {
  std::filesystem::path bufferFile;
  ExternalMesh::Bytes sourceBytes,followBytes;
  std::vector<size_t> vertices,triangles;
+ std::vector<float> rotationWeights;
  std::vector<PoseMath::Vector3> lipFrameVertices;
  std::vector<float> contactRayHits;
  std::array<std::vector<float>,3> sectionHits;
@@ -30,10 +31,11 @@ struct MouthRuntime {
  void* lipRight=nullptr;
  void* eyeLeft=nullptr;
  void* eyeRight=nullptr;
- std::array<void*,2> handAnchorBones{};
+ std::array<void*,4> handAnchorBones{};
  void* targetPelvis=nullptr;
- PoseMath::Vector3 pelvicAnchorLocal{},pelvicForwardLocal{};
- float pelvicOffsetCm=0;
+ PoseMath::Vector3 pelvicAnchorLocal{};
+ MouthContact::AttachmentAxes pelvicAxesLocal{};
+ MouthContact::AttachmentOffsets attachmentOffsets{};
  int impactVolume=100,playingVolume=-1;
  ExternalMesh::Bytes impactSource,impactWave;
  struct LowerFaceBone {
@@ -51,6 +53,30 @@ struct MouthRuntime {
  float opening=0;
  PoseMath::Quaternion base{},written{};
 } mouthContact;
+
+struct AttachmentMarkerState{
+ MouthContact::Attachment target=MouthContact::Attachment::Off;
+ ULONGLONG expires=0,retryAt=0;
+ std::optional<PoseMath::Vector3> world,screen;
+ std::unique_ptr<Pins> pins;
+ std::string identity;
+ void* root=nullptr;
+ std::array<void*,4> bones{};
+} attachmentMarker;
+
+void RequestAttachmentMarker(MouthContact::Attachment target){
+ if(attachmentMarker.target!=target){
+  attachmentMarker.identity.clear();
+  attachmentMarker.screen.reset();
+ }
+ attachmentMarker.target=target;
+ attachmentMarker.expires=GetTickCount64()+MouthContact::AttachmentMarkerMs;
+}
+
+void MarkAttachmentWorld(MouthContact::Attachment target,PoseMath::Vector3 point){
+ if(attachmentMarker.target==target&&MouthContact::AttachmentMarkerVisible(GetTickCount64(),attachmentMarker.expires))
+  attachmentMarker.world=point;
+}
 
 bool PlayContactAudio(const wchar_t* filename,DWORD flags){
  const auto path=moduleFolder/L"audio"/filename;
@@ -100,10 +126,18 @@ void UpdateMouthAudio(bool touching){
  }
 }
 
+Presets::Json AttachmentOffsetsJson(){
+ auto data=Presets::Json::object();
+ for(size_t i=0;i<MouthContact::AttachmentCount;++i)
+  data[std::string(MouthContact::AttachmentKeys[i+1])]=mouthContact.attachmentOffsets[i];
+ return data;
+}
+
 Presets::Json AttachmentState(){
  using enum MouthContact::Attachment;
  return {{"enabled",mouthContact.target==Mouth},{"target",MouthContact::AttachmentKey(mouthContact.target)},
-         {"status",mouthContact.status},{"pelvic_offset_cm",mouthContact.pelvicOffsetCm},
+         {"status",mouthContact.status},{"attachment_offsets_cm",AttachmentOffsetsJson()},
+         {"pelvic_offset_cm",mouthContact.attachmentOffsets[1][2]},
          {"pelvic_audio_volume",mouthContact.impactVolume}};
 }
 
@@ -188,10 +222,12 @@ bool PublishMouthFollow(PoseMath::Vector3 pivot,PoseMath::Quaternion rotation){
  if(!ConnectMouthRenderer())return false;
  auto& bytes=mouthContact.followBytes;
  bytes=mouthContact.sourceBytes;
- for(auto offset:mouthContact.vertices){
+ for(size_t i=0;i<mouthContact.vertices.size();++i){
+  if(mouthContact.rotationWeights[i]<=0)continue;
+  const auto offset=mouthContact.vertices[i];
   PoseMath::Vector3 source{ExternalMesh::Get<float>(bytes,offset),ExternalMesh::Get<float>(bytes,offset+4),
                            ExternalMesh::Get<float>(bytes,offset+8)};
-  auto point=MouthContact::RotateAround(pivot,rotation,source);
+  auto point=MouthContact::RotateAttachedVertex(pivot,rotation,source,mouthContact.rotationWeights[i]);
   ExternalMesh::Put<float>(bytes,offset,point.x);
   ExternalMesh::Put<float>(bytes,offset+4,point.y);
   ExternalMesh::Put<float>(bytes,offset+8,point.z);
@@ -228,6 +264,7 @@ void PrepareMouthGeometry(){
  mouthContact.meshName.clear();
  mouthContact.bufferFile.clear();
  mouthContact.vertices.clear();
+ mouthContact.rotationWeights.clear();
  mouthContact.triangles.clear();
  mouthContact.lipFrameVertices.clear();
  mouthContact.sourceBytes.clear();
@@ -266,6 +303,7 @@ void PrepareMouthGeometry(){
   auto base=center((*hi)[1],span*.06f),tip=center((*lo)[1],span*.06f);
   mouthContact.geometry={base,tip};
   for(auto index:indices)mouthContact.vertices.push_back(index*resource.stride);
+  for(const auto& p:points)mouthContact.rotationWeights.push_back(MouthContact::RootRotationWeight(((*hi)[1]-p[1])/span));
   for(auto index:draw){
    const auto it=std::lower_bound(mouthContact.vertices.begin(),mouthContact.vertices.end(),index*resource.stride);
    mouthContact.triangles.push_back(static_cast<size_t>(it-mouthContact.vertices.begin()));
@@ -377,20 +415,25 @@ bool BindMouth(){
   if(mouthContact.target==Pelvis){
    auto hips=findUnique("Bip001_Pelvis"),left=findUnique("Bip001_L_Thigh"),
         right=findUnique("Bip001_R_Thigh"),spine=findUnique("Bip001_Spine");
-   Vector3 leftPosition{},rightPosition{},spinePosition{},anchor{},forward{};
+   Vector3 leftPosition{},rightPosition{},spinePosition{},anchor{};
+   AttachmentAxes axes{};
    ReferenceMatrix inverse{};
    PoseMath::Quaternion bodyRotation{};
    if(!hips||!left||!right||!spine||!Value(WorldToLocal,hips,inverse)||
       !Value(Position,left,leftPosition)||!Value(Position,right,rightPosition)||
       !Value(Position,spine,spinePosition)||!Value(WorldRotation,pose.reverse.root,bodyRotation)||
       !PoseMath::Normalize(bodyRotation)||!PelvicAnchor(leftPosition,rightPosition,spinePosition,
-       PoseMath::Rotate(bodyRotation,{0,0,1}),anchor,&forward)){
+       PoseMath::Rotate(bodyRotation,{0,0,1}),anchor,&axes)){
     mouthContact.status="互動角色缺少骨盆定位所需的骨架";
     return false;
    }
    mouthContact.pelvicAnchorLocal=MouthTransformPoint(inverse,anchor);
-   mouthContact.pelvicForwardLocal=Subtract(MouthTransformPoint(inverse,Add(anchor,forward)),mouthContact.pelvicAnchorLocal);
-   if(!Finite(mouthContact.pelvicAnchorLocal)||!Finite(mouthContact.pelvicForwardLocal)){
+   const auto localAxis=[&](Vector3 axis){
+    return Subtract(MouthTransformPoint(inverse,Add(anchor,axis)),mouthContact.pelvicAnchorLocal);
+   };
+   mouthContact.pelvicAxesLocal={localAxis(axes.right),localAxis(axes.up),localAxis(axes.forward)};
+   if(!Finite(mouthContact.pelvicAnchorLocal)||!Finite(mouthContact.pelvicAxesLocal.right)||
+      !Finite(mouthContact.pelvicAxesLocal.up)||!Finite(mouthContact.pelvicAxesLocal.forward)){
     mouthContact.status="吸附目標骨架姿勢已失效";
     return false;
    }
@@ -398,7 +441,9 @@ bool BindMouth(){
   }else{
    const bool left=mouthContact.target==LeftHand;
    mouthContact.handAnchorBones={findUnique(left?"Bip001_L_Hand":"Bip001_R_Hand"),
-                                 findUnique(left?"Bip001_L_Finger2":"Bip001_R_Finger2")};
+                                 findUnique(left?"Bip001_L_Finger2":"Bip001_R_Finger2"),
+                                 findUnique(left?"Bip001_L_Finger1":"Bip001_R_Finger1"),
+                                 findUnique(left?"Bip001_L_Finger4":"Bip001_R_Finger4")};
    if(!mouthContact.handAnchorBones[0]||!mouthContact.handAnchorBones[1]){
     mouthContact.status=left?"互動角色缺少左手掌骨架":"互動角色缺少右手掌骨架";
     return false;
@@ -505,6 +550,120 @@ bool UpdateMouthEntrance(MouthContact::Entrance& entrance,PoseMath::Vector3 head
  return true;
 }
 
+bool ReadPalmAnchor(const std::array<void*,4>& bones,bool left,const MouthContact::AttachmentOffset& offset,
+                    PoseMath::Vector3& anchor){
+ using namespace MouthContact;
+ const auto [hand,middle,index,little]=bones;
+ Vector3 wristPosition{},middlePosition{};
+ if(!Living(hand)||!Living(middle)||!Value(Position,hand,wristPosition)||!Value(Position,middle,middlePosition))return false;
+ anchor=PalmAnchor(wristPosition,middlePosition);
+ if(offset==AttachmentOffset{})return Finite(anchor);
+ AttachmentAxes axes{};
+ Vector3 indexPosition{},littlePosition{};
+ if(!Living(index)||!Living(little)||!Value(Position,index,indexPosition)||!Value(Position,little,littlePosition)||
+    !PalmAxes(wristPosition,middlePosition,indexPosition,littlePosition,left,axes)){
+  PoseMath::Quaternion rotation{};
+  if(!Value(WorldRotation,hand,rotation)||!PoseMath::Normalize(rotation))return false;
+  axes={PoseMath::Rotate(rotation,{1,0,0}),PoseMath::Rotate(rotation,{0,1,0}),PoseMath::Rotate(rotation,{0,0,1})};
+ }
+ anchor=OffsetAnchor(anchor,axes,offset);
+ return Finite(anchor);
+}
+
+bool BindAttachmentMarker(const std::string& identity,ULONGLONG now){
+ using enum MouthContact::Attachment;
+ auto& marker=attachmentMarker;
+ if(marker.identity==identity&&marker.pins&&Living(marker.root)&&
+    (!pose.pins||!Living(pose.reverse.root)||pose.reverse.root==marker.root))return true;
+ if(marker.identity!=identity)marker.retryAt=0;
+ marker.identity=identity;
+ marker.pins.reset();marker.root=nullptr;marker.bones={};
+ if(now<marker.retryAt)return false;
+ marker.retryAt=now+500;
+ Pins scan;
+ int matches=0;
+ void* root=nullptr;
+ if(pose.pins&&Living(pose.reverse.root)){root=pose.reverse.root;matches=1;}
+ else EachPartner(scan,[&](void*,void* model,int){
+  if(Presets::Identity(ObjectName(model))!=identity)return;
+  root=scan.Keep(Call(GoTransform,model));
+  ++matches;
+ });
+ if(matches!=1||!Living(root))return false;
+ std::vector<Pose::FullBone> hierarchy;
+ if(!WalkBones(root,1,scan,hierarchy))return false;
+ auto pins=std::make_unique<Pins>();
+ const auto find=[&](std::string_view name)->void*{
+  void* found=nullptr;
+  for(const auto& bone:hierarchy)if(EfmiBridge::Lower(bone.info.name)==name){
+   if(found&&found!=bone.bone)return nullptr;
+   found=bone.bone;
+  }
+  return found?pins->Keep(found):nullptr;
+ };
+ auto& b=marker.bones;
+ if(marker.target==Mouth)
+  b={find("bip001_head"),find("bip001_neck"),find("lipmupjoint"),find("lipmdnjoint")};
+ else if(marker.target==Pelvis)
+  b={find("bip001_l_thigh"),find("bip001_r_thigh"),find("bip001_spine")};
+ else {
+  const std::string side=marker.target==LeftHand?"bip001_l_":"bip001_r_";
+  b={find(side+"hand"),find(side+"finger2"),find(side+"finger1"),find(side+"finger4")};
+ }
+ marker.root=pins->Keep(root);
+ marker.pins=std::move(pins);
+ return Living(marker.root);
+}
+
+bool ReadAttachmentMarkerWorld(ULONGLONG now,PoseMath::Vector3& point){
+ using namespace MouthContact;
+ using enum Attachment;
+ const auto target=attachmentMarker.target;
+ if(target==Off||!BindAttachmentMarker(workflow.draft.target,now))return false;
+ const auto& b=attachmentMarker.bones;
+ const auto& offset=mouthContact.attachmentOffsets[static_cast<size_t>(target)-1];
+ if(target==LeftHand||target==RightHand)return ReadPalmAnchor({b[0],b[1],b[2],b[3]},target==LeftHand,offset,point);
+ Vector3 a{},c{},d{};
+ PoseMath::Quaternion body{};
+ if(!Value(WorldRotation,attachmentMarker.root,body)||!PoseMath::Normalize(body)||
+    !Living(b[0])||!Living(b[1])||!Value(Position,b[0],a)||!Value(Position,b[1],c))return false;
+ auto forward=PoseMath::Rotate(body,{0,0,1});
+ AttachmentAxes axes{};
+ if(target==Pelvis){
+  if(!Living(b[2])||!Value(Position,b[2],d)||!PelvicAnchor(a,c,d,forward,point,&axes))return false;
+ }else{
+  auto up=Subtract(a,c);
+  if(!Normalize(up))return false;
+  forward=Subtract(forward,Scale(up,Dot(forward,up)));
+  if(!Normalize(forward))return false;
+  axes={Cross(up,forward),up,forward};
+  point=Add(a,Subtract(Scale(forward,.09f),Scale(up,.045f)));
+  Vector3 upper{},lower{};
+  if(Living(b[2])&&Living(b[3])&&Value(Position,b[2],upper)&&Value(Position,b[3],lower)&&
+     MouthContact::Length(Subtract(PoseMath::Lerp(upper,lower,.5f),a))<=.25f)point=PoseMath::Lerp(upper,lower,.5f);
+ }
+ point=OffsetAnchor(point,axes,offset);
+ return Finite(point);
+}
+
+void PumpAttachmentMarker(){
+ auto& marker=attachmentMarker;
+ const auto now=GetTickCount64();
+ if(!MouthContact::AttachmentMarkerVisible(now,marker.expires)){
+  if(marker.target!=MouthContact::Attachment::Off)marker=AttachmentMarkerState{};
+  return;
+ }
+ marker.screen.reset();
+ if(!methods[WorldToViewportPoint].resolved.method_info)return;
+ PoseMath::Vector3 point{},screen{};
+ if(marker.world)point=*marker.world;
+ else if(!ReadAttachmentMarkerWorld(now,point))return;
+ auto camera=Call(CameraMain);
+ void* args[]{&point};
+ if(camera&&Value(WorldToViewportPoint,camera,screen,args)&&PoseMath::Finite(screen)&&
+    screen.z>0&&screen.x>=0&&screen.x<=1&&screen.y>=0&&screen.y<=1)marker.screen=screen;
+}
+
 void ApplyLowerFaceHinge(PoseMath::Vector3 pivot,PoseMath::Quaternion worldDelta){
  for(auto& part:mouthContact.lowerFace){
   ReferenceMatrix parentInverse{};
@@ -589,23 +748,22 @@ void PumpMouth(float dt){
   }
   return published;
  };
+ const auto& offset=mouthContact.attachmentOffsets[static_cast<size_t>(mouthContact.target)-1];
  if(mouthContact.target!=Mouth){
   UpdateMouthAudio(false);
-  Vector3 anchor{};
+  Vector3 anchor{},audioAnchor{};
   bool valid=false;
   const bool pelvic=mouthContact.target==Pelvis;
   if(pelvic){
    ReferenceMatrix transform{};
    valid=Living(mouthContact.targetPelvis)&&Value(LocalToWorld,mouthContact.targetPelvis,transform);
-   if(valid)anchor=MouthTransformPoint(transform,Add(mouthContact.pelvicAnchorLocal,
-    Scale(mouthContact.pelvicForwardLocal,mouthContact.pelvicOffsetCm*.01f)));
-  }else{
-   const auto [hand,middle]=mouthContact.handAnchorBones;
-   Vector3 wristPosition{},middlePosition{};
-   valid=Living(hand)&&Living(middle)&&Value(Position,hand,wristPosition)&&Value(Position,middle,middlePosition);
-   if(valid)anchor=PalmAnchor(wristPosition,middlePosition);
-  }
+   if(valid){
+    audioAnchor=MouthTransformPoint(transform,mouthContact.pelvicAnchorLocal);
+    anchor=MouthTransformPoint(transform,OffsetAnchor(mouthContact.pelvicAnchorLocal,mouthContact.pelvicAxesLocal,offset));
+   }
+  }else valid=ReadPalmAnchor(mouthContact.handAnchorBones,mouthContact.target==LeftHand,offset,anchor);
   valid=valid&&Finite(anchor);
+  if(valid)MarkAttachmentWorld(mouthContact.target,anchor);
   const auto direction=Subtract(anchor,probe.base);
   Vector3 relative{};
   if(valid&&pelvic)valid=ToLocalDelta(x,y,z,direction,relative);
@@ -619,11 +777,14 @@ void PumpMouth(float dt){
   }
   const bool published=publish();
   float rootGap=0;
-  if(pelvic&&mouthContact.following){
-   const auto activeTip=published?bufferWorld(RotateAround(pivot,mouthContact.followRotation,tip)):probe.tip;
-   rootGap=RootSurfaceDistance({probe.base,activeTip},anchor);
-   const bool entered=EnterRootContact(rootGap,mouthContact.rootTouching);
-   if(entered&&audioPlaying&&PlayPelvicAudio())++mouthContact.rootAudioPlays;
+  if(pelvic&&valid&&rendererReady&&ToLocalDelta(x,y,z,Subtract(audioAnchor,probe.base),relative)){
+   const auto audioAim=FollowPelvis({pivot,tip},Add(pivot,relative));
+   if(audioAim.gate==FollowGate::Accepted){
+    const auto audioTip=bufferWorld(RotateAround(pivot,audioAim.rotation,tip));
+    rootGap=RootSurfaceDistance({probe.base,audioTip},audioAnchor);
+    const bool entered=EnterRootContact(rootGap,mouthContact.rootTouching);
+    if(entered&&audioPlaying&&PlayPelvicAudio())++mouthContact.rootAudioPlays;
+   }else mouthContact.rootTouching=false;
   }else mouthContact.rootTouching=false;
   const auto now=GetTickCount64();
   if(!rendererReady)mouthContact.status="DIH 追蹤需要本版內建 EFMI";
@@ -657,6 +818,8 @@ void PumpMouth(float dt){
   PoseMath::Rotate(headRotation,mouthContact.mouthUp),
   PoseMath::Rotate(headRotation,mouthContact.mouthOut)};
  const bool lipReference=UpdateMouthEntrance(entrance,head);
+ entrance.center=OffsetAnchor(entrance.center,{entrance.right,entrance.up,entrance.outward},offset);
+ MarkAttachmentWorld(Mouth,entrance.center);
  Vector3 desired{};
  const float separation=MouthContact::Length(Subtract(entrance.center,probe.tip));
  const auto gate=FollowTarget(entrance,probe,mouthContact.following,desired);

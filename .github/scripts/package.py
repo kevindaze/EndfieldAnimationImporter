@@ -33,7 +33,7 @@ def main():
     if version.encode() not in binary:
         raise SystemExit('DLL version does not match module.json; rebuild first')
     executables = {path: dll.with_name(Path(path).name) for path in (
-        'EAI.Launcher.exe', 'native/windows-x64/EAI.OfflineHost.exe')}
+        'EAI.Launcher.exe', 'native/windows-x64/EAI.OfflineHost.exe', 'native/windows-x64/EAI.AnimationImport.exe')}
     for executable in executables.values():
         contents = executable.read_bytes()
         if len(contents) < 64 or contents[:2] != b'MZ':
@@ -46,6 +46,7 @@ def main():
     files = {'module.json': ROOT / 'module.json', 'native/windows-x64/Endfield.Interaction.dll': dll,
              **executables,
              'ui/index.html': ROOT / 'ui/index.html', 'ui/language-catalog.js': ROOT / 'ui/language-catalog.js', 'ui/language.js': ROOT / 'ui/language.js', 'tools/retarget_fbx.py': ROOT / 'tools/retarget_fbx.py',
+             'UFBX-LICENSE.txt': ROOT / 'third_party/ufbx/LICENSE',
              'NLOHMANN-LICENSE.MIT': ROOT / 'third_party/nlohmann/LICENSE.MIT',
              'BETTER-ENDFIELD-LICENSE.txt': ROOT / 'third_party/better-endfield/LICENSE'}
     for name in ('EModLoader.Launcher.exe', 'EModLoader.Host.dll', 'EModLoader.OfflineHost.exe', 'EModLoader.XInputProxy.dll'):

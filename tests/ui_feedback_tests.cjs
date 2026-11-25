@@ -3,7 +3,8 @@ const elements=new Map();function el(id=''){return {id,value:'',textContent:'',d
 function walk(node,predicate,out=[]){if(predicate(node))out.push(node);for(const c of node.children||[])walk(c,predicate,out);return out}
 const document={getElementById(id){if(!elements.has(id))elements.set(id,el(id));return elements.get(id)},createElement:el,querySelectorAll(selector){const all=[...elements.values()].flatMap(e=>walk(e,n=>selector==='[data-prepared-slot]'?n.dataset?.preparedSlot!==undefined:false));return [...new Set(all)]}};
 let pairedTest={items:[],matching:'',can_create:true,can_add:false};let listener,sent=[],fail=false,saved={},bank,draft,prepared,clips=[{id:'one',name:'動畫一',duration:10},{id:'two',name:'動畫二',duration:3}];
-const bridge={onmessage(f){listener=f},async readConfig(){return saved},async saveConfig(v){saved=v;return {}},async send(body){sent.push(body);let result=0,response={status:'connected'};switch(body.command){case 'paired_rename':pairedTest.items.find(p=>p.id===body.id).name=body.name;response={paired:pairedTest};break;case 'paired_get':response={paired:pairedTest,operator_roster:[{id:'chr_0004_pelica',name:'佩利卡',male:false,enabled:true},{id:'chr_0006_wolfgd',name:'狼衛',male:true,enabled:true}]};break;case 'paired_create':prepared={format:'endfield-interaction-calibration',version:1,setting:draft};pairedTest={items:[{id:'pair_1',name:'Pair',targets:[draft.target]}],matching:'pair_1',can_create:false,can_add:false};response={paired:pairedTest};break;case 'paired_assign':bank.slots[body.index]={...prepared.setting,enabled:true,pair_id:body.id};response={preset_bank:bank,paired:pairedTest};break;case 'external_mouth_set':response={mouth_contact:{enabled:body.enabled,status:'嘴部測試'}};break;case 'external_attachment_set':response={mouth_contact:{target:body.enabled?body.target:'off',status:'吸附測試'}};break;case 'external_pelvic_tuning':response={saved:true,mouth_contact:{}};break;case 'external_live':case 'external_mod_reset':case 'external_mesh_set':case 'external_mesh_reset':case 'external_get':case 'external_scan':case 'external_set':case 'external_apply':case 'external_remove':response={folder:'G:/Mods',reload_key:'no_modifiers VK_F10',detail:body.command==='external_apply'?'已寫入，回遊戲按 F10':'參數待寫入',mods:[{name:'模組',file:'G:/Mods/mod.ini',controls:[{index:0,key:'G:/Mods/mod.ini|$shape',name:'形態',binding:'$shape',min:0,max:1,value:.5,integer:false}],meshes:[{index:0,key:'G:/Mods/mod.ini|horn',name:'角',condition:'$show == 1',resource:'ResourceHorn',supported:true,values:[0,0,0,0,0,0,1,1,1,0,0,0]}]}]};break;case 'external_models_get':response={parts:[{id:'wing',name:'翅膀',actor:1,backend:'efmi_shapekey',status:'控制橋接尚未接通',available:false,parameters:[{name:'翅膀形態',min:0,max:1}]}]};break;case 'bones_get':response={bones:[{key:'0|@root',name:'@root',group:'人物根節點',actor:0,depth:0,values:[0,0,0,0,0,0,1,1,1]},{key:'1|Bip001_Head[0]',name:'Bip001_Head',group:'頭／頸／臉',actor:1,depth:1,values:[0,0,0,0,0,0,1,1,1]}],generation:7,total:2,offset:0,scale_available:true};break;case 'free_camera_get':response={free_camera:{enabled:false,hotkey:120,status:'自由相機已關閉'}};break;case 'free_camera_set':response={free_camera:{enabled:body.enabled,hotkey:120,status:body.enabled?'自由相機已啟用；遊戲操作已攔截':'自由相機已關閉'}};break;case 'free_camera_hotkey':response={free_camera:{enabled:false,hotkey:body.key,status:'自由相機已關閉'}};break;case 'calibration_loop':response=body.actor==='controlled'?{controlled_loop_enabled:body.enabled}:{loop_enabled:body.enabled};break;case 'support_set':draft={...draft,[body.actor==='controlled'?'controlled_support':'support_mode']:body.mode};response={workflow:draft};prepared=null;break;case 'draft_set':draft=body.setting;prepared=null;response={paired:{...pairedTest,can_create:true,can_add:false}};break;case 'prepare_export':prepared={format:'endfield-interaction-calibration',version:1,setting:draft};response={calibration:prepared};break;case 'calibration_export':response={calibration:prepared};break;case 'calibration_save':response={calibration:prepared,path:'C:/test/Exports/setting.json'};break;case 'animations_get':response={animations:clips};break;case 'animation_delete':clips=clips.filter(c=>c.id!==body.id);break;case 'animations_reorder':clips=body.order.map(id=>clips.find(c=>c.id===id));break;case 'presets_set':bank=body.preset_bank;break;case 'prepared_to_slot':if(!prepared)result=2;else{bank.slots[body.index]={...prepared.setting,enabled:true};response={preset_bank:bank}}break;case 'calibration_to_slot':if(body.calibration.format!=='endfield-interaction-calibration'||body.calibration.version!==1)result=2;else{bank.slots[body.index]={...body.calibration.setting,enabled:true};response={preset_bank:bank}}break;}queueMicrotask(()=>listener({kind:'reply',result:fail?2:result,body:fail?{status:'connect_first'}:response}));return {accepted:true}}};
+let importEngine='blender';
+const bridge={onmessage(f){listener=f},async readConfig(){return saved},async saveConfig(v){saved=v;return {}},async send(body){sent.push(body);let result=0,response={status:'connected'};switch(body.command){case 'blender_get':response={animation_import_engine:importEngine};break;case 'animation_import_engine':importEngine=body.engine;response={animation_import_engine:importEngine,saved:true};break;case 'paired_rename':pairedTest.items.find(p=>p.id===body.id).name=body.name;response={paired:pairedTest};break;case 'paired_get':response={paired:pairedTest,operator_roster:[{id:'chr_0004_pelica',name:'佩利卡',male:false,enabled:true},{id:'chr_0006_wolfgd',name:'狼衛',male:true,enabled:true}]};break;case 'paired_create':prepared={format:'endfield-interaction-calibration',version:1,setting:draft};pairedTest={items:[{id:'pair_1',name:'Pair',targets:[draft.target]}],matching:'pair_1',can_create:false,can_add:false};response={paired:pairedTest};break;case 'paired_assign':bank.slots[body.index]={...prepared.setting,enabled:true,pair_id:body.id};response={preset_bank:bank,paired:pairedTest};break;case 'external_mouth_set':response={mouth_contact:{enabled:body.enabled,status:'嘴部測試'}};break;case 'external_attachment_set':response={mouth_contact:{target:body.enabled?body.target:'off',status:'吸附測試'}};break;case 'external_attachment_tuning':case 'external_pelvic_tuning':response={saved:true,mouth_contact:{}};break;case 'external_live':case 'external_mod_reset':case 'external_mesh_set':case 'external_mesh_reset':case 'external_get':case 'external_scan':case 'external_set':case 'external_apply':case 'external_remove':response={folder:'G:/Mods',reload_key:'no_modifiers VK_F10',detail:body.command==='external_apply'?'已寫入，回遊戲按 F10':'參數待寫入',mods:[{name:'模組',file:'G:/Mods/mod.ini',controls:[{index:0,key:'G:/Mods/mod.ini|$shape',name:'形態',binding:'$shape',min:0,max:1,value:.5,integer:false}],meshes:[{index:0,key:'G:/Mods/mod.ini|horn',name:'角',condition:'$show == 1',resource:'ResourceHorn',supported:true,values:[0,0,0,0,0,0,1,1,1,0,0,0]}]}]};break;case 'external_models_get':response={parts:[{id:'wing',name:'翅膀',actor:1,backend:'efmi_shapekey',status:'控制橋接尚未接通',available:false,parameters:[{name:'翅膀形態',min:0,max:1}]}]};break;case 'bones_get':response={bones:[{key:'0|@root',name:'@root',group:'人物根節點',actor:0,depth:0,values:[0,0,0,0,0,0,1,1,1]},{key:'1|Bip001_Head[0]',name:'Bip001_Head',group:'頭／頸／臉',actor:1,depth:1,values:[0,0,0,0,0,0,1,1,1]}],generation:7,total:2,offset:0,scale_available:true};break;case 'free_camera_get':response={free_camera:{enabled:false,hotkey:120,status:'自由相機已關閉'}};break;case 'free_camera_set':response={free_camera:{enabled:body.enabled,hotkey:120,status:body.enabled?'自由相機已啟用；遊戲操作已攔截':'自由相機已關閉'}};break;case 'free_camera_hotkey':response={free_camera:{enabled:false,hotkey:body.key,status:'自由相機已關閉'}};break;case 'calibration_loop':response=body.actor==='controlled'?{controlled_loop_enabled:body.enabled}:{loop_enabled:body.enabled};break;case 'support_set':draft={...draft,[body.actor==='controlled'?'controlled_support':'support_mode']:body.mode};response={workflow:draft};prepared=null;break;case 'draft_set':draft=body.setting;prepared=null;response={paired:{...pairedTest,can_create:true,can_add:false}};break;case 'prepare_export':prepared={format:'endfield-interaction-calibration',version:1,setting:draft};response={calibration:prepared};break;case 'calibration_export':response={calibration:prepared};break;case 'calibration_save':response={calibration:prepared,path:'C:/test/Exports/setting.json'};break;case 'animations_get':response={animations:clips};break;case 'animation_delete':clips=clips.filter(c=>c.id!==body.id);break;case 'animations_reorder':clips=body.order.map(id=>clips.find(c=>c.id===id));break;case 'presets_set':bank=body.preset_bank;break;case 'prepared_to_slot':if(!prepared)result=2;else{bank.slots[body.index]={...prepared.setting,enabled:true};response={preset_bank:bank}}break;case 'calibration_to_slot':if(body.calibration.format!=='endfield-interaction-calibration'||body.calibration.version!==1)result=2;else{bank.slots[body.index]={...body.calibration.setting,enabled:true};response={preset_bank:bank}}break;}queueMicrotask(()=>listener({kind:'reply',result:fail?2:result,body:fail?{status:'connect_first'}:response}));return {accepted:true}}};
 document.getElementById('exportCalibration').disabled=true;const html=fs.readFileSync('ui/index.html','utf8');assert(!html.includes('id="calibration"'));assert(html.includes('主控預設姿勢：'));assert(html.indexOf('chooseBlenderFolder')<html.indexOf('fbxManagerAction'));assert(!html.includes('createObjectURL')); assert(!html.includes('link.download'));const context={document,window:{betterEndfield:bridge,confirm:()=>true,prompt:()=> '自訂配對名'},setTimeout,clearTimeout,console,TextEncoder,Blob,URL:{createObjectURL(){return 'blob:test'},revokeObjectURL(){}}};vm.runInNewContext(html.split('<script>')[1].split('</script>')[0],context);
 (async()=>{await new Promise(r=>setTimeout(r,0));const click=id=>{const b=document.getElementById(id);return b.onclick({currentTarget:b})};const b=document.getElementById('connect');const pending=click('connect');assert(b.disabled);await pending;assert.equal(b.dataset.state,'success');fail=true;await click('connect');assert.equal(b.dataset.state,'error');fail=false;
 assert(!html.includes('chooseMmdModel'));assert(!html.includes('mmdModelPath'));
@@ -41,6 +42,15 @@ await click('externalScan');
 assert.equal(sent.at(-1).command,'external_scan');
 assert(!Object.hasOwn(sent.at(-1),'path'));
 assert.equal(document.getElementById('externalList').children.length,1);
+const engineSelect=document.getElementById('animationImportEngine');
+assert.equal(engineSelect.value,'blender');
+engineSelect.tagName='SELECT';
+for(const engine of ['eai','blender']){
+ engineSelect.value=engine;
+ await engineSelect.onchange({currentTarget:engineSelect});
+ assert.deepEqual(sent.at(-1),{command:'animation_import_engine',engine});
+ assert.equal(document.getElementById('blenderImportSettings').hidden,engine==='eai');
+}
 const mouthToggle=document.getElementById('mouthContactEnabled');
 assert.equal(mouthToggle.checked,false);
 mouthToggle.checked=true;
@@ -69,20 +79,34 @@ rightHand.checked=false;
 await rightHand.onchange();
 assert.equal(sent.at(-1).enabled,false);
 assert.equal(document.getElementById('mouthContactStatus').textContent,'吸附測試');
-const offset=document.getElementById('pelvicOffset');
-offset.value='-1.2';
-await offset.oninput();
-assert.deepEqual(sent.at(-1),{command:'external_pelvic_tuning',field:'offset',value:-1.2,save:false});
-await offset.onchange();
-assert.equal(sent.at(-1).save,true);
-assert.equal(document.getElementById('pelvicOffsetValue').textContent,'-1.2');
+const offsets={};
+for(const target of ['mouth',...Object.values(targets)]){
+ offsets[target]=[];
+ for(const [axis,field] of [...'xyz'].entries()){
+  const id='attachment-'+target+'-'+field;
+  const limit=field==='x'?5:10;
+  assert(html.includes('id="'+id+'" min="-'+limit+'" max="'+limit+'"'));
+  const slider=document.getElementById(id);
+  slider.value='-1.2';
+  await slider.oninput();
+  assert.deepEqual(sent.at(-1),{command:'external_attachment_tuning',target,field,value:-1.2,save:false});
+  await slider.onchange();
+  assert.equal(sent.at(-1).save,true);
+  assert.equal(document.getElementById(id+'Value').textContent,'-1.2');
+  offsets[target].push(1.5+axis);
+ }
+}
 const volume=document.getElementById('pelvicAudioVolume');
 volume.value='42';
 await volume.onchange();
 assert.deepEqual(sent.at(-1),{command:'external_pelvic_tuning',field:'volume',value:42,save:true});
 assert.equal(document.getElementById('pelvicAudioVolumeValue').textContent,'42');
-listener({kind:'event',body:{mouth_contact:{target:'off',pelvic_offset_cm:1.5,pelvic_audio_volume:0}}});
-assert.equal(document.getElementById('pelvicOffsetValue').textContent,'1.5');
+listener({kind:'event',body:{mouth_contact:{target:'off',attachment_offsets_cm:offsets,pelvic_audio_volume:0}}});
+for(const [target,values] of Object.entries(offsets)){
+ for(const [axis,field] of [...'xyz'].entries()){
+  assert.equal(document.getElementById('attachment-'+target+'-'+field+'Value').textContent,values[axis].toFixed(1));
+ }
+}
 assert.equal(document.getElementById('pelvicAudioVolumeValue').textContent,'0');
 
 console.log('PASS: animation calibration, pair assignment, fixed mod scan and external bridge controls');})().catch(e=>{console.error(e);process.exitCode=1});

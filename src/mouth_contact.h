@@ -27,6 +27,17 @@ struct Probe {Vector3 base,tip;};
 enum class Attachment {Off,Mouth,Pelvis,LeftHand,RightHand};
 inline constexpr std::array<std::string_view,5> AttachmentKeys{"off","mouth","pelvis","left_hand","right_hand"};
 inline std::string_view AttachmentKey(Attachment target){return AttachmentKeys[static_cast<size_t>(target)];}
+inline constexpr size_t AttachmentCount=AttachmentKeys.size()-1;
+inline constexpr std::array<float,3> AttachmentOffsetLimits{5,10,10};
+inline constexpr unsigned long long AttachmentMarkerMs=5000;
+inline bool AttachmentMarkerVisible(unsigned long long now,unsigned long long expires){return now<expires;}
+using AttachmentOffset=std::array<float,3>;
+using AttachmentOffsets=std::array<AttachmentOffset,AttachmentCount>;
+
+struct AttachmentAxes {Vector3 right,up,forward;};
+inline Vector3 OffsetAnchor(Vector3 anchor,const AttachmentAxes& axes,const AttachmentOffset& cm){
+ return Add(anchor,Scale(Add(Scale(axes.right,cm[0]),Add(Scale(axes.up,cm[1]),Scale(axes.forward,cm[2]))),.01f));
+}
 
 inline Vector3 ProjectToTipDepth(const Entrance& mouth,const Probe& probe,Vector3 target){
  const auto shaft=Subtract(probe.tip,probe.base);
@@ -118,6 +129,18 @@ inline Vector3 PalmAnchor(Vector3 wrist,Vector3 middle){
  return Add(wrist,Scale(Subtract(middle,wrist),.55f));
 }
 
+inline bool PalmAxes(Vector3 wrist,Vector3 middle,Vector3 index,Vector3 little,bool left,AttachmentAxes& axes){
+ auto up=Subtract(middle,wrist);
+ if(!Normalize(up))return false;
+ auto side=Subtract(little,index);
+ if(!Normalize(side))return false;
+ auto forward=Cross(side,up);
+ if(!Normalize(forward))return false;
+ if(!left)forward=Scale(forward,-1);
+ axes={Cross(up,forward),up,forward};
+ return true;
+}
+
 inline bool EnterRootContact(float distance,bool& touching){
  constexpr float enterDistance=.022f,releaseDistance=.032f;
  const bool wasTouching=touching;
@@ -135,7 +158,7 @@ inline float RootSurfaceDistance(const Probe& probe,Vector3 anchor){
  return Length(Subtract(offset,Scale(rootSection,along)));
 }
 
-inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3 bodyForward,Vector3& anchor,Vector3* forwardAxis=nullptr){
+inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3 bodyForward,Vector3& anchor,AttachmentAxes* axes=nullptr){
  auto across=Subtract(right,left);
  const float width=Length(across);
  const auto hips=Scale(Add(left,right),.5f);
@@ -145,7 +168,7 @@ inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3 bodyFo
  if(!Normalize(up))return false;
  auto forward=Cross(across,up);
  if(Dot(forward,bodyForward)<0)forward=Scale(forward,-1);
- if(forwardAxis)*forwardAxis=forward;
+ if(axes)*axes={Cross(up,forward),up,forward};
  anchor=Add(hips,Scale(Subtract(Scale(forward,.27f),Scale(up,.24f)),width));
  return Finite(anchor);
 }
@@ -162,6 +185,17 @@ inline PoseMath::Quaternion AimRotation(Vector3 original,Vector3 aim){
 
 inline Vector3 RotateAround(Vector3 pivot,PoseMath::Quaternion rotation,Vector3 point){
  return Add(pivot,PoseMath::Rotate(rotation,Subtract(point,pivot)));
+}
+
+inline float RootRotationWeight(float rootToTip){
+ const auto t=std::clamp((rootToTip-.20f)/(.42f-.20f),0.f,1.f);
+ return t*t*(3-2*t);
+}
+
+inline Vector3 RotateAttachedVertex(Vector3 pivot,PoseMath::Quaternion rotation,Vector3 point,float weight){
+ if(weight<=0)return point;
+ if(weight<1)rotation=PoseMath::Nlerp({},rotation,weight);
+ return RotateAround(pivot,rotation,point);
 }
 
 inline bool ToLocalDelta(Vector3 x,Vector3 y,Vector3 z,Vector3 world,Vector3& local){

@@ -123,10 +123,32 @@ int main(){
        "body attachment uses distinct acquisition and release distances");
  check(MouthContact::FollowPoint(attachment,{0,0,.16f},false)==MouthContact::FollowGate::Reach,
        "a close point outside the fixed radius cannot acquire an attachment");
- Vector3 pelvisAnchor{},pelvicForward{};
- check(MouthContact::PelvicAnchor({-.10f,0,0},{.10f,0,0},{0,.18f,0},{0,0,1},pelvisAnchor,&pelvicForward)&&
-       SamePosition(pelvisAnchor,{0,-.048f,.054f})&&SamePosition(pelvicForward,{0,0,1}),
+ Vector3 pelvisAnchor{};
+ MouthContact::AttachmentAxes attachmentAxes{};
+ check(MouthContact::PelvicAnchor({-.10f,0,0},{.10f,0,0},{0,.18f,0},{0,0,1},pelvisAnchor,&attachmentAxes)&&
+       SamePosition(pelvisAnchor,{0,-.048f,.054f})&&SamePosition(attachmentAxes.forward,{0,0,1}),
        "pelvic anchor uses the middle offset and exposes the fore-aft axis");
+ check(SamePosition(MouthContact::OffsetAnchor(pelvisAnchor,attachmentAxes,{1,-2,3}),{.01f,-.068f,.084f}),
+       "attachment offsets apply all three local axes in centimeters");
+ MouthContact::AttachmentAxes leftPalm{},rightPalm{};
+ const auto rootVertex=Vector3{.02f,-.01f,0};
+ const auto rotation90=Quaternion{0,0,std::sqrt(.5f),std::sqrt(.5f)};
+ check(MouthContact::RootRotationWeight(.10f)==0&&MouthContact::RootRotationWeight(.60f)==1&&
+       SamePosition(MouthContact::RotateAttachedVertex({},rotation90,rootVertex,0),rootVertex)&&
+       SamePosition(MouthContact::RotateAttachedVertex({},rotation90,rootVertex,1),
+                    MouthContact::RotateAround({},rotation90,rootVertex))&&
+       MouthContact::RootRotationWeight(.31f)>.49f&&MouthContact::RootRotationWeight(.31f)<.51f,
+       "attachment seam stays fixed while the transition reaches full rigid rotation");
+ check(MouthContact::AttachmentMarkerMs==5000&&
+       MouthContact::AttachmentMarkerVisible(5999,6000)&&!MouthContact::AttachmentMarkerVisible(6000,6000),
+       "attachment point expires five seconds after its last movement");
+ check(MouthContact::AttachmentOffsetLimits==std::array<float,3>{5,10,10},
+       "attachment Y and Z have twice the X adjustment range");
+ check(MouthContact::PalmAxes({},{0,1,0},{-1,1,0},{1,1,0},true,leftPalm)&&
+       MouthContact::PalmAxes({},{0,1,0},{1,1,0},{-1,1,0},false,rightPalm)&&
+       SamePosition(leftPalm.forward,{0,0,1})&&SamePosition(rightPalm.forward,{0,0,1})&&
+       !MouthContact::PalmAxes({},{0,1,0},{0,1,0},{0,2,0},true,attachmentAxes),
+       "mirrored hands keep a consistent palm-normal sign and reject degenerate axes");
  check(MouthContact::PelvicAnchor({1.1f,2,3},{.9f,2,3},{1,2.18f,3},{0,0,-1},pelvisAnchor)&&
        SamePosition(pelvisAnchor,{1,1.952f,2.946f})&&
        !MouthContact::PelvicAnchor({},{},{},{0,0,1},pelvisAnchor),"pelvic anchor follows body rotation and rejects invalid skeletons");

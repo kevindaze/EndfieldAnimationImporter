@@ -20,6 +20,8 @@
 
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+#include "ui_language_preference.h"
+
 namespace {
 namespace fs=std::filesystem;
 using Json=nlohmann::json;
@@ -65,13 +67,13 @@ bool IsGame(const fs::path& path){
  return path.is_absolute()&&_wcsicmp(path.filename().c_str(),L"Endfield.exe")==0&&fs::is_regular_file(path);
 }
 
-void SaveGame(const fs::path& settings,const fs::path& game){
+void SaveLauncherSettings(const fs::path& settings,const fs::path& game,bool guideSeen){
  fs::create_directories(settings.parent_path());
  auto pending=settings;
  pending+=L"."+std::to_wstring(GetCurrentProcessId())+L".tmp";
  {
   std::ofstream out(pending,std::ios::binary|std::ios::trunc);
-  out<<Json{{"game",Utf8(game)}}.dump(2);
+  out<<Json{{"game",Utf8(game)},{"appearance_guide_seen",guideSeen}}.dump(2);
   out.close();
   if(!out)throw std::runtime_error("無法儲存遊戲路徑。");
  }
@@ -81,11 +83,11 @@ void SaveGame(const fs::path& settings,const fs::path& game){
  }
 }
 
-fs::path BrowseGame(HWND owner,const fs::path& game){
+fs::path BrowseGame(HWND owner,const fs::path& game,bool english){
  std::array<wchar_t,32768> path{};
  OPENFILENAMEW dialog{sizeof(dialog)};
  dialog.hwndOwner=owner;
- dialog.lpstrTitle=L"選擇遊戲中的 Endfield.exe";
+ dialog.lpstrTitle=english?L"Select Endfield.exe":L"選擇遊戲中的 Endfield.exe";
  dialog.lpstrFilter=L"Endfield.exe\0Endfield.exe\0\0";
  const auto initial=game.parent_path();
  dialog.lpstrInitialDir=initial.empty()?nullptr:initial.c_str();
@@ -93,24 +95,27 @@ fs::path BrowseGame(HWND owner,const fs::path& game){
  dialog.nMaxFile=static_cast<DWORD>(path.size());
  dialog.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
  if(GetOpenFileNameW(&dialog))return fs::path(path.data());
- if(CommDlgExtendedError())throw std::runtime_error("無法開啟選擇遊戲視窗。");
+ if(CommDlgExtendedError())throw std::runtime_error(english?"Could not open the file picker.":"無法開啟選擇遊戲視窗。");
  return {};
 }
 
 #include "standalone_launch.inc"
 
 struct Launcher {
- fs::path settings,game,emlGame,official;
+ fs::path settings,languagePath,game,emlGame,official;
+ bool english=false,guideSeen=false;
  std::future<Json> launch;
 
- explicit Launcher(const fs::path& local):settings(local/L"BetterEndfield"/L"Interaction"/L"launcher.json"){
+ explicit Launcher(const fs::path& local):settings(local/L"BetterEndfield"/L"Interaction"/L"launcher.json"),
+     languagePath(settings.parent_path()/L"ui-language.txt"){
   try{
    const auto eml=ReadJson(EmlData(local)/L"launcher.json",16384);
    emlGame=Path(eml.value("game_executable_path",""));
    official=Path(eml.value("official_parent",""));
   }catch(const std::exception&){}
-  try{game=Path(ReadJson(settings,16384).at("game").get<std::string>());}
+  try{const auto data=ReadJson(settings,16384);game=Path(data.at("game").get<std::string>());guideSeen=data.value("appearance_guide_seen",false);}
   catch(const std::exception&){game=emlGame;}
+  english=UiLanguagePreference::Load(languagePath).value_or(false);
  }
 
 

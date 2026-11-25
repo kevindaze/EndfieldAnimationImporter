@@ -1,8 +1,9 @@
 // Invoked under gate. All Unity reads happen in PumpFbxImport on the supported
-// Gameplay callback; Blender is a separate hidden process and receives files only.
+// Gameplay callback. Both converters run in separate hidden processes.
 std::string fbxManagerAction="none",blenderFolder;
+bool nativeAnimationImport=false;
 std::array<std::string,2> animationImportFolders{};
-struct FbxJob {std::filesystem::path source,folder;bool mmd=false;int actor=1;std::string target,managerAction;HANDLE process=nullptr;uint64_t started=0;bool waiting=false;} fbxJob;
+struct FbxJob {std::filesystem::path source,folder;bool mmd=false,native=false;int actor=1;std::string target,managerAction;HANDLE process=nullptr;uint64_t started=0;bool waiting=false;} fbxJob;
 std::wstring QuoteArgument(const std::wstring& value){std::wstring result=L"\"";size_t slashes=0;for(wchar_t c:value){if(c==L'\\'){++slashes;continue;}if(c==L'\"'){result.append(slashes*2+1,L'\\');result+=c;}else{result.append(slashes,L'\\');result+=c;}slashes=0;}result.append(slashes*2,L'\\');result+=L'\"';return result;}
 std::filesystem::path BlenderInFolder(const std::filesystem::path& folder){std::error_code error;if(std::filesystem::is_regular_file(folder/L"blender.exe",error))return folder/L"blender.exe";if(!std::filesystem::is_directory(folder,error))return {};std::vector<std::filesystem::path> choices;for(auto& entry:std::filesystem::directory_iterator(folder,error))if(entry.is_directory(error)&&std::filesystem::is_regular_file(entry.path()/L"blender.exe",error))choices.push_back(entry.path()/L"blender.exe");std::sort(choices.rbegin(),choices.rend());return choices.empty()?std::filesystem::path{}:choices.front();}
 std::filesystem::path FindBlender(){if(!blenderFolder.empty())return BlenderInFolder(std::filesystem::path(std::u8string(blenderFolder.begin(),blenderFolder.end())));wchar_t folder[32768]{};DWORD n=GetEnvironmentVariableW(L"ProgramW6432",folder,32768);if(!n||n>=32768)n=GetEnvironmentVariableW(L"ProgramFiles",folder,32768);return n&&n<32768?BlenderInFolder(std::filesystem::path(folder)/L"Blender Foundation"):std::filesystem::path{};}
@@ -10,11 +11,22 @@ std::filesystem::path FindBlender(){if(!blenderFolder.empty())return BlenderInFo
 std::string BlenderDisplayFolder(){static std::string choice,cached;static ULONGLONG checked=0;auto now=GetTickCount64();if(!checked||choice!=blenderFolder||now-checked>=5000){checked=now;choice=blenderFolder;auto executable=FindBlender();auto bytes=executable.empty()?std::u8string{}:executable.parent_path().u8string();cached=std::string(bytes.begin(),bytes.end());}return cached;}
 bool SetBlenderFolder(const std::string& selected){auto path=std::filesystem::path(std::u8string(selected.begin(),selected.end()));auto executable=BlenderInFolder(path);if(executable.empty()){panelStatus="此資料夾找不到 blender.exe，請選擇 Blender 安裝資料夾";return false;}auto folder=std::filesystem::absolute(executable.parent_path()).u8string();blenderFolder=std::string(folder.begin(),folder.end());bool saved=SavePanelSettings();panelStatus=saved?"Blender 資料夾已保存":"Blender 位置已套用，但保存失敗";if(host&&host->emit){auto data=Presets::Json{{"type","blender_path"},{"folder",blenderFolder},{"saved",saved}}.dump();host->emit(host->context,data.c_str());}return true;}
 
+const char* AnimationImportEngine(){return nativeAnimationImport?"eai":"blender";}
+bool SelectAnimationImportEngine(bool native){
+ nativeAnimationImport=native;
+ const bool saved=SavePanelSettings();
+ if(host&&host->emit){
+  auto event=Presets::Json{{"type","animation_import_engine"},{"animation_import_engine",AnimationImportEngine()},{"saved",saved}}.dump();
+  host->emit(host->context,event.c_str());
+ }
+ return saved;
+}
+
 void FbxEvent(const std::string& status,const std::string& detail=""){panelStatus=detail.empty()?status:detail;Log("FBX: "+status+" "+detail);if(host&&host->emit){auto body=Presets::Json{{"type","fbx_status"},{"status",status},{"detail",detail}}.dump();host->emit(host->context,body.c_str());}}
 void CancelFbxImport(){if(fbxJob.process){if(WaitForSingleObject(fbxJob.process,0)==WAIT_TIMEOUT){TerminateProcess(fbxJob.process,1);WaitForSingleObject(fbxJob.process,2000);}CloseHandle(fbxJob.process);}fbxJob=FbxJob{};}
 bool QueueFbxImport(const std::string& filename,bool controlled=false){
  if(!hook){FbxEvent("fbx_connect_first","請先連接遊戲入口");return false;}if(pose.pins){FbxEvent("fbx_stop_first","請先停止播放再匯入 FBX / VMD");return false;}if(fbxJob.waiting||fbxJob.process){FbxEvent("fbx_busy","另一個動畫正在轉換");return false;}
- try{auto path=std::filesystem::path(std::u8string(filename.begin(),filename.end()));auto extension=path.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),towlower);if((extension!=L".fbx"&&extension!=L".vmd")||!std::filesystem::is_regular_file(path)||std::filesystem::file_size(path)>536870912)throw std::runtime_error("Choose an existing FBX or VMD below 512 MB");fbxJob.mmd=extension==L".vmd";fbxJob.source=std::filesystem::absolute(path);fbxJob.actor=controlled?0:1;fbxJob.target=controlled?lastControlled:workflow.draft.target;if(controlled&&!Presets::Administrator(fbxJob.target))throw std::runtime_error("請先控制男管或女管，再導入主控動畫");fbxJob.managerAction=controlled||fbxManagerAction=="imported"?"none":fbxManagerAction;fbxJob.waiting=true;auto folder=fbxJob.source.parent_path().u8string();animationImportFolders[fbxJob.actor]=std::string(folder.begin(),folder.end());SavePanelSettings();FbxEvent("fbx_queued","動畫已排隊，下一次 Gameplay 更新取得 bind pose 後轉換");return true;}catch(const std::exception& e){FbxEvent("fbx_invalid_file",e.what());return false;}
+ try{auto path=std::filesystem::path(std::u8string(filename.begin(),filename.end()));auto extension=path.extension().wstring();std::transform(extension.begin(),extension.end(),extension.begin(),towlower);if((extension!=L".fbx"&&extension!=L".vmd")||!std::filesystem::is_regular_file(path)||std::filesystem::file_size(path)>536870912)throw std::runtime_error("Choose an existing FBX or VMD below 512 MB");fbxJob.native=nativeAnimationImport;fbxJob.mmd=extension==L".vmd";fbxJob.source=std::filesystem::absolute(path);fbxJob.actor=controlled?0:1;fbxJob.target=controlled?lastControlled:workflow.draft.target;if(controlled&&!Presets::Administrator(fbxJob.target))throw std::runtime_error("請先控制男管或女管，再導入主控動畫");fbxJob.managerAction=controlled||fbxManagerAction=="imported"?"none":fbxManagerAction;fbxJob.waiting=true;auto folder=fbxJob.source.parent_path().u8string();animationImportFolders[fbxJob.actor]=std::string(folder.begin(),folder.end());SavePanelSettings();FbxEvent("fbx_queued","動畫已排隊，下一次 Gameplay 更新取得 bind pose 後轉換");return true;}catch(const std::exception& e){FbxEvent("fbx_invalid_file",e.what());return false;}
 }
 void PumpFbxImport(){
 #ifndef INTERACTION_NO_OVERLAY
@@ -23,17 +35,30 @@ void PumpFbxImport(){
    if(pose.pins||(fbxJob.actor==0?lastControlled:workflow.draft.target)!=fbxJob.target)throw std::runtime_error("角色或播放狀態已變動，請重新匯入");
    lastSkeletonReferencePath.clear();ScanBoneCatalog();if(lastSkeletonReferencePath.empty())throw std::runtime_error("無法取得角色骨架參考");
    auto reference=std::filesystem::path(std::u8string(lastSkeletonReferencePath.begin(),lastSkeletonReferencePath.end()));std::ifstream refFile(reference);auto ref=Presets::Json::parse(refFile);if(ref.value(fbxJob.actor==0?"controlled":"partner",std::string{})!=fbxJob.target||!ref.contains("mesh_bindposes")||ref["mesh_bindposes"].empty())throw std::runtime_error("Mesh.bindposes 取得失敗，請查看模組日誌；不會使用待機姿勢冒充 bind pose");
-   auto executable=FindBlender();if(executable.empty())throw std::runtime_error("找不到 Blender，請在導入動畫區選擇 Blender 資料夾");auto script=moduleFolder.parent_path().parent_path()/L"tools"/(fbxJob.mmd?L"retarget_vmd.py":L"retarget_fbx.py");if(!std::filesystem::exists(script))throw std::runtime_error("模組缺少 FBX 轉換工具");
-   fbxJob.folder=PanelSettingsPath().parent_path()/L"FbxImports"/std::to_wstring(GetTickCount64());std::filesystem::create_directories(fbxJob.folder);
-   std::wstring command=QuoteArgument(executable.wstring())+L" --background --factory-startup --python-exit-code 1 --python "+QuoteArgument(script.wstring())+L" -- "+QuoteArgument(fbxJob.source.wstring())+L" "+QuoteArgument(fbxJob.folder.wstring())+L" --reference "+QuoteArgument(reference.wstring());
+   auto executable=fbxJob.native?moduleFolder/L"EAI.AnimationImport.exe":FindBlender();
+   if(executable.empty()||!std::filesystem::is_regular_file(executable))
+    throw std::runtime_error(fbxJob.native?"找不到 EAI 動畫匯入工具":"找不到 Blender，請在導入動畫區選擇 Blender 資料夾");
+   fbxJob.folder=PanelSettingsPath().parent_path()/L"FbxImports"/
+       (std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64()));
+   std::filesystem::create_directories(fbxJob.folder);
+   std::wstring command=QuoteArgument(executable.wstring());
+   if(!fbxJob.native){
+    auto script=moduleFolder.parent_path().parent_path()/L"tools"/(fbxJob.mmd?L"retarget_vmd.py":L"retarget_fbx.py");
+    if(!std::filesystem::is_regular_file(script))throw std::runtime_error("模組缺少 Blender 動畫轉換腳本");
+    command+=L" --background --factory-startup --python-exit-code 1 --python "+QuoteArgument(script.wstring())+L" --";
+   }
+   command+=L" "+QuoteArgument(fbxJob.source.wstring())+L" "+QuoteArgument(fbxJob.folder.wstring())+
+      L" --reference "+QuoteArgument(reference.wstring());
    command+=fbxJob.actor==0?L" --actor controlled":L" --actor partner";
    STARTUPINFOW info{sizeof(info)};info.dwFlags=STARTF_USESHOWWINDOW;info.wShowWindow=SW_HIDE;PROCESS_INFORMATION process{};
-   if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,fbxJob.folder.c_str(),&info,&process))throw std::runtime_error("Blender 背景程序啟動失敗");CloseHandle(process.hThread);fbxJob.process=process.hProcess;fbxJob.started=GetTickCount64();fbxJob.waiting=false;FbxEvent("fbx_converting","動畫正在背景重定向，請等待；不會凍結遊戲");
+   if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,fbxJob.folder.c_str(),&info,&process))throw std::runtime_error("動畫轉換程序啟動失敗");
+   CloseHandle(process.hThread);fbxJob.process=process.hProcess;fbxJob.started=GetTickCount64();fbxJob.waiting=false;
+   FbxEvent("fbx_converting",fbxJob.native?"EAI 正在背景轉換動畫":"Blender 正在背景轉換動畫");
   }
   if(!fbxJob.process)return;
-  auto wait=WaitForSingleObject(fbxJob.process,0);if(wait==WAIT_TIMEOUT){if(GetTickCount64()-fbxJob.started>300000)throw std::runtime_error("動畫轉換超過五分鐘，已取消");return;}if(wait!=WAIT_OBJECT_0)throw std::runtime_error("無法讀取 Blender 執行狀態");
+  auto wait=WaitForSingleObject(fbxJob.process,0);if(wait==WAIT_TIMEOUT){if(GetTickCount64()-fbxJob.started>300000)throw std::runtime_error("動畫轉換超過五分鐘，已取消");return;}if(wait!=WAIT_OBJECT_0)throw std::runtime_error("無法讀取動畫轉換程序狀態");
   DWORD exitCode=1;GetExitCodeProcess(fbxJob.process,&exitCode);CloseHandle(fbxJob.process);fbxJob.process=nullptr;
-  auto resultPath=fbxJob.folder/L"result.json";if(!std::filesystem::exists(resultPath)||std::filesystem::file_size(resultPath)>65536)throw std::runtime_error("Blender 未產生有效轉換結果");std::ifstream resultFile(resultPath);auto result=Presets::Json::parse(resultFile);if(exitCode!=0||!result.value("ok",false))throw std::runtime_error(result.value("error",std::string("Blender 轉換失敗")));
+  auto resultPath=fbxJob.folder/L"result.json";if(!std::filesystem::exists(resultPath)||std::filesystem::file_size(resultPath)>65536)throw std::runtime_error("動畫轉換未產生有效結果");std::ifstream resultFile(resultPath);auto result=Presets::Json::parse(resultFile);if(exitCode!=0||!result.value("ok",false))throw std::runtime_error(result.value("error",std::string("動畫轉換失敗")));
   const auto& files=result.at("files");if(!files.is_array()||files.empty()||files.size()>128)throw std::runtime_error("轉換片段數量超出範圍");std::vector<Presets::Json> payloads;size_t newClips=0;std::set<std::string> ids;
   for(auto& file:files){auto name=file.get<std::string>();auto base=std::filesystem::path(name);if(base.is_absolute()||base.filename()!=base||name.find_first_of("\\/:")!=std::string::npos)throw std::runtime_error("轉換結果路徑無效");auto path=fbxJob.folder/base;std::ifstream in(path);auto json=Presets::Json::parse(in);ImportedAnimation::Clip clip;if(!clip.Read(json)||!clip.absolute||clip.targetCharacter!=fbxJob.target||clip.targetActor!=fbxJob.actor||!ids.insert(clip.id).second)throw std::runtime_error("轉換片段未通過模組驗證");if(fbxJob.managerAction!="none"){json["manager_action"]=fbxJob.managerAction;json["id"]=clip.id+"_"+fbxJob.managerAction;json["name"]=clip.name+(fbxJob.managerAction=="front_waist"?" · 正面雙手摟腰":fbxJob.managerAction=="back_waist"?" · 背面雙手摟腰":fbxJob.managerAction=="head_pat"?" · 雙手摸頭":fbxJob.managerAction=="waist_hold"?" · 管理員輕摟":" · 管理員站姿");if(!clip.Read(json))throw std::runtime_error("管理員動作設定無效");}json["name"]=json.at("name").get<std::string>()+" · "+CharacterNames::Name(fbxJob.target)+(fbxJob.actor==0?" · 主控":"");newClips+=!animationLibrary.contains(clip.id);payloads.push_back(std::move(json));}
   if(animationLibrary.size()+newClips>128)throw std::runtime_error("動畫列表將超過 128 個，請先刪除不用的動畫");

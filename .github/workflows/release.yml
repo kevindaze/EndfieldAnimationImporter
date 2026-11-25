@@ -102,5 +102,5 @@ jobs:
           if [[ "$PRERELEASE" == "true" ]]; then options+=(--prerelease); fi
           gh release create "$tag" "package/$FILENAME" "package/EndfieldAnimationImporter-${VERSION}-source.zip" \
             --target "$COMMIT" --title "EndfieldAnimationImporter $VERSION" \
-            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Bundled EAI-only EML runtime. FBX conversion requires Blender." \
+            --notes "Compiled Windows x64 runtime. Version: $VERSION. Source commit: $COMMIT. Bundled EAI-only EML runtime. VMD and FBX animation import can use EAI or Blender." \
             "${options[@]}"

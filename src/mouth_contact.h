@@ -118,7 +118,24 @@ inline Vector3 PalmAnchor(Vector3 wrist,Vector3 middle){
  return Add(wrist,Scale(Subtract(middle,wrist),.55f));
 }
 
-inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3& anchor){
+inline bool EnterRootContact(float distance,bool& touching){
+ constexpr float enterDistance=.022f,releaseDistance=.032f;
+ const bool wasTouching=touching;
+ touching=std::isfinite(distance)&&distance>=0&&distance<=(wasTouching?releaseDistance:enterDistance);
+ return touching&&!wasTouching;
+}
+
+inline float RootSurfaceDistance(const Probe& probe,Vector3 anchor){
+ // Approximate the exposed root region with the first part of the current axis.
+ const auto rootSection=Scale(Subtract(probe.tip,probe.base),.35f);
+ const auto offset=Subtract(anchor,probe.base);
+ const float lengthSquared=Dot(rootSection,rootSection);
+ if(lengthSquared<=1e-8f)return Length(offset);
+ const float along=std::clamp(Dot(offset,rootSection)/lengthSquared,0.f,1.f);
+ return Length(Subtract(offset,Scale(rootSection,along)));
+}
+
+inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3 bodyForward,Vector3& anchor,Vector3* forwardAxis=nullptr){
  auto across=Subtract(right,left);
  const float width=Length(across);
  const auto hips=Scale(Add(left,right),.5f);
@@ -126,7 +143,10 @@ inline bool PelvicAnchor(Vector3 left,Vector3 right,Vector3 spine,Vector3& ancho
  auto up=Subtract(spine,hips);
  up=Subtract(up,Scale(across,Dot(up,across)));
  if(!Normalize(up))return false;
- anchor=Add(hips,Scale(Subtract(Scale(Cross(across,up),.18f),Scale(up,.24f)),width));
+ auto forward=Cross(across,up);
+ if(Dot(forward,bodyForward)<0)forward=Scale(forward,-1);
+ if(forwardAxis)*forwardAxis=forward;
+ anchor=Add(hips,Scale(Subtract(Scale(forward,.27f),Scale(up,.24f)),width));
  return Finite(anchor);
 }
 

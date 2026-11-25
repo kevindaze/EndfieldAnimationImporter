@@ -123,12 +123,15 @@ int main(){
        "body attachment uses distinct acquisition and release distances");
  check(MouthContact::FollowPoint(attachment,{0,0,.16f},false)==MouthContact::FollowGate::Reach,
        "a close point outside the fixed radius cannot acquire an attachment");
- Vector3 pelvisAnchor{};
- check(MouthContact::PelvicAnchor({-.10f,0,0},{.10f,0,0},{0,.18f,0},pelvisAnchor)&&
-       SamePosition(pelvisAnchor,{0,-.048f,.036f}),"pelvic anchor is relative to thighs and spine");
- check(MouthContact::PelvicAnchor({1.1f,2,3},{.9f,2,3},{1,2.18f,3},pelvisAnchor)&&
-       SamePosition(pelvisAnchor,{1,1.952f,2.964f})&&
-       !MouthContact::PelvicAnchor({},{},{},pelvisAnchor),"pelvic anchor follows body rotation and rejects invalid skeletons");
+ Vector3 pelvisAnchor{},pelvicForward{};
+ check(MouthContact::PelvicAnchor({-.10f,0,0},{.10f,0,0},{0,.18f,0},{0,0,1},pelvisAnchor,&pelvicForward)&&
+       SamePosition(pelvisAnchor,{0,-.048f,.054f})&&SamePosition(pelvicForward,{0,0,1}),
+       "pelvic anchor uses the middle offset and exposes the fore-aft axis");
+ check(MouthContact::PelvicAnchor({1.1f,2,3},{.9f,2,3},{1,2.18f,3},{0,0,-1},pelvisAnchor)&&
+       SamePosition(pelvisAnchor,{1,1.952f,2.946f})&&
+       !MouthContact::PelvicAnchor({},{},{},{0,0,1},pelvisAnchor),"pelvic anchor follows body rotation and rejects invalid skeletons");
+ check(MouthContact::PelvicAnchor({.10f,0,0},{-.10f,0,0},{0,.18f,0},{0,0,1},pelvisAnchor)&&
+       SamePosition(pelvisAnchor,{0,-.048f,.054f}),"the hip cross product cannot send the anchor backward");
  const MouthContact::Probe pelvicProbe{{.03f,-.04f,.11f},{.03f,-.04f,.29f}};
  for(const auto offset:{Vector3{.025f,0,.08f},Vector3{.06f,0,0},Vector3{0,0,-.09f},Vector3{0,0,.18f},Vector3{}}){
   const auto target=MouthContact::Add(pelvicProbe.base,offset);
@@ -156,6 +159,27 @@ int main(){
        "pelvic alignment releases beyond 1.3 times mesh length");
  check(MouthContact::FollowPelvis({pelvicProbe.base,pelvicProbe.base},pelvicProbe.tip).gate==MouthContact::FollowGate::Invalid,
        "zero-length geometry cannot acquire a pelvic anchor");
+ bool rootTouching=false;
+ check(!MouthContact::EnterRootContact(.03f,rootTouching)&&!rootTouching&&
+       MouthContact::EnterRootContact(.02f,rootTouching)&&rootTouching,
+       "a root contact fires only when entering the contact distance");
+ check(!MouthContact::EnterRootContact(.020f,rootTouching)&&rootTouching&&
+       !MouthContact::EnterRootContact(.028f,rootTouching)&&rootTouching&&
+       !MouthContact::EnterRootContact(.034f,rootTouching)&&!rootTouching&&
+       MouthContact::EnterRootContact(.02f,rootTouching),
+       "a root contact fires again only after separation");
+ const MouthContact::Probe rootProbe{{0,0,0},{0,0,.194f}};
+ rootTouching=false;
+ const auto rootContact=[&](Vector3 point){
+  return MouthContact::EnterRootContact(MouthContact::RootSurfaceDistance(rootProbe,point),rootTouching);
+ };
+ check(!rootContact({0,0,.14f})&&!rootContact({.03f,0,.07f})&&
+       rootContact({0,0,.085f})&&rootTouching,
+       "sound can start on the estimated exposed root while excluding midshaft and lateral approaches");
+ check(!rootContact({0,0,.02f})&&rootTouching&&
+       !rootContact({0,0,.09f})&&rootTouching&&
+       !rootContact({0,0,.105f})&&!rootTouching&&rootContact({0,0,.085f}),
+       "deeper motion and withdrawal through the root region do not retrigger before separation");
  check(MouthContact::JawAngle(.0275f,.03f,.07f)==0&&
        MouthContact::JawAngle(.0275f,.005f,.07f)>.2f&&MouthContact::JawAngle(.10f,0,.035f)<=.42f,
        "jaw only supplements a missing opening and stays within its rotation limit");

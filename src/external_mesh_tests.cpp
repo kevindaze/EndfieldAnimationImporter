@@ -1,8 +1,21 @@
 #include "live_external_mesh.h"
+#include "efmi_scan_cache.h"
+#include "contact_audio.h"
 #include <iostream>
 #include <chrono>
 #include <cstring>
 int main(int argc,char** argv){using namespace ExternalMesh;int fail=0;auto check=[&](bool ok,const char* name){if(!ok){++fail;std::cerr<<name<<"\n";}};
+ Bytes wave(48);
+ std::memcpy(wave.data(),"RIFF",4);
+ Put<uint32_t>(wave,4,40);
+ std::memcpy(wave.data()+8,"WAVEfmt ",8);
+ Put<uint32_t>(wave,16,16);Put<uint16_t>(wave,20,1);Put<uint16_t>(wave,34,16);
+ std::memcpy(wave.data()+36,"data",4);
+ Put<uint32_t>(wave,40,4);Put<int16_t>(wave,44,-32000);Put<int16_t>(wave,46,16000);
+ auto softer=ContactAudio::WithVolume(wave,25);
+ check(Get<int16_t>(softer,44)==-8000&&Get<int16_t>(softer,46)==4000&&
+       std::equal(wave.begin(),wave.begin()+44,softer.begin())&&ContactAudio::WithVolume(wave,100)==wave,
+       "impact volume scales only the WAV samples and preserves full volume");
  auto dir=std::filesystem::current_path()/("bem-mesh-tests-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));std::filesystem::create_directories(dir);auto file=dir/"mod.ini";std::string source="namespace = TestMod\n[TextureOverrideTest]\nib = ResourceIndex\nvb0 = ResourcePosition\n; [mesh:horn]\ndrawindexed = 3,0,0\n[ResourceIndex]\nformat = R32_UINT\nfilename = Index.buf\n[ResourcePosition]\nstride = 16\nfilename = Position.buf\n[ResourcePosition_0]\nstride = 16\nfilename = Position.buf\n[ResourceDelta]\nstride = 12\nfilename = Position_merged_packed_pos_delta.buf\n[TextureOverrideSecond]\nib = ResourceIndex\nvb0 = ResourceSecond\n; [mesh:fin]\ndrawindexed = 3,0,0\n[ResourceSecond]\nstride = 16\nfilename = Second.buf\n";
  auto write=[&](const std::filesystem::path& path,const Bytes& bytes){std::ofstream out(path,std::ios::binary);out.write(reinterpret_cast<const char*>(bytes.data()),bytes.size());};
  Bytes positions(64),indices(12),mapping(16),delta(36);for(int i=0;i<4;++i){Put<float>(positions,i*16,float(i==1));Put<float>(positions,i*16+4,float(i==2));Put<uint32_t>(positions,i*16+12,0xAB123456);Put<int32_t>(mapping,i*4,i<3?i:-1);}for(int i=0;i<3;++i){Put<uint32_t>(indices,i*4,i);Put<float>(delta,i*12,1);}
@@ -36,6 +49,34 @@ int main(int argc,char** argv){using namespace ExternalMesh;int fail=0;auto chec
  check(!std::filesystem::exists(first)&&!std::filesystem::exists(second)&&Read(dir/"Position.buf")==positions,
        "disabled live files leave the originals intact");
  std::filesystem::remove(dir/"BEM.GeneratedMeshes");
+ const auto cacheFile=dir/"model-cache.json";
+ EfmiScanCache::Scan cold(cacheFile);
+ const auto firstScan=cold.ReadMod(file,dir);
+ check(cold.hits==0&&cold.scanned==1&&firstScan.meshes[0].supported&&cold.Changed()&&cold.Write(cacheFile),
+       "cold model scan saves parsed metadata and probe results");
+ EfmiScanCache::Scan warm(cacheFile);
+ const auto warmScan=warm.ReadMod(file,dir);
+ check(warm.hits==1&&warm.scanned==0&&!warm.Changed()&&warmScan.meshes[0].values==firstScan.meshes[0].values,
+       "unchanged model uses cached mesh support and pivot");
+ const auto positionFile=dir/"Position.buf";
+ const auto earlier=std::filesystem::last_write_time(positionFile);
+ auto changedPositions=positions;
+ Put<float>(changedPositions,16,2);
+ write(positionFile,changedPositions);
+ std::filesystem::last_write_time(positionFile,earlier+std::chrono::seconds(2));
+ EfmiScanCache::Scan changed(cacheFile);
+ const auto changedScan=changed.ReadMod(file,dir);
+ check(changed.hits==0&&changed.scanned==1&&changedScan.meshes[0].values[9]==100&&changed.Write(cacheFile),
+       "same-size vertex changes invalidate the cached pivot");
+ {std::ofstream out(file,std::ios::app);out<<"\n; INI changed";}
+ EfmiScanCache::Scan changedIni(cacheFile);
+ changedIni.ReadMod(file,dir);
+ check(changedIni.hits==0&&changedIni.scanned==1,"INI changes invalidate the cached catalog");
+ {std::ofstream out(cacheFile);out<<"{unfinished";}
+ EfmiScanCache::Scan damaged(cacheFile);
+ check(damaged.ReadMod(file,dir).meshes[0].supported&&damaged.scanned==1,"corrupt cache falls back to a normal scan");
+ std::filesystem::remove(cacheFile);
+ write(positionFile,positions);
  scan.mods[0].meshes.push_back(scan.mods[0].meshes[0]);scan.mods[0].meshes.back().name="unselected-shared";scan.mods[0].meshes.back().dirty=false;bool refused=false;try{Build(scan);}catch(...){refused=true;}check(refused,"unselected shared mesh refused");
  if(argc>1){auto real=EfmiBridge::Discover(std::filesystem::path(std::u8string(argv[1],argv[1]+std::strlen(argv[1]))));int supported=0,selected=0;for(auto& m:real.mods)for(auto& mesh:m.meshes){
   Probe(m,mesh);if(mesh.supported)++supported;

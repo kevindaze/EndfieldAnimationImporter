@@ -1,6 +1,7 @@
 struct MouthRuntime {
  MouthContact::Attachment target=MouthContact::Attachment::Off;
  bool wrote=false,rebind=false;
+ bool loopRequested=false,loopPlaying=false,rootTouching=false;
  std::string status="吸附未啟用",meshName;
  std::filesystem::path meshIni;
  MouthContact::Probe geometry{};
@@ -18,6 +19,7 @@ struct MouthRuntime {
  bool baselineSidecar=false,submitted=false,following=false;
  PoseMath::Quaternion followRotation{};
  ULONGLONG nextBaselineCheck=0,submittedAt=0,lastTrace=0,renderCountAtSubmit=0,faceWrites=0;
+ unsigned long long rootAudioPlays=0;
 
  std::unique_ptr<Pins> pins;
  void* pelvis=nullptr;
@@ -30,7 +32,10 @@ struct MouthRuntime {
  void* eyeRight=nullptr;
  std::array<void*,2> handAnchorBones{};
  void* targetPelvis=nullptr;
- PoseMath::Vector3 pelvicAnchorLocal{};
+ PoseMath::Vector3 pelvicAnchorLocal{},pelvicForwardLocal{};
+ float pelvicOffsetCm=0;
+ int impactVolume=100,playingVolume=-1;
+ ExternalMesh::Bytes impactSource,impactWave;
  struct LowerFaceBone {
   void* bone;void* parent;
   PoseMath::Vector3 basePosition{},writtenPosition{};
@@ -47,10 +52,59 @@ struct MouthRuntime {
  PoseMath::Quaternion base{},written{};
 } mouthContact;
 
+bool PlayContactAudio(const wchar_t* filename,DWORD flags){
+ const auto path=moduleFolder/L"audio"/filename;
+ if(PlaySoundW(path.c_str(),nullptr,SND_FILENAME|SND_ASYNC|SND_NODEFAULT|flags))return true;
+ Log("Contact audio could not start: "+EfmiBridge::Utf8(path.filename()));
+ return false;
+}
+
+bool PlayPelvicAudio(){
+ if(!mouthContact.impactVolume)return false;
+ try{
+  if(mouthContact.playingVolume==mouthContact.impactVolume){
+   if(PlaySoundW(reinterpret_cast<const wchar_t*>(mouthContact.impactWave.data()),nullptr,
+      SND_MEMORY|SND_ASYNC|SND_NODEFAULT))return true;
+  }else{
+   if(mouthContact.impactSource.empty()){
+    const auto path=moduleFolder/L"audio/papaAudio.wav";
+    if(std::filesystem::file_size(path)>2*1024*1024)throw std::runtime_error("Contact audio is too large");
+    mouthContact.impactSource=ExternalMesh::Read(path);
+   }
+   auto adjusted=ContactAudio::WithVolume(mouthContact.impactSource,mouthContact.impactVolume);
+   if(PlaySoundW(reinterpret_cast<const wchar_t*>(adjusted.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT)){
+    // Keep the buffer alive until the next playback replaces it or the module stops.
+    mouthContact.impactWave=std::move(adjusted);
+    mouthContact.playingVolume=mouthContact.impactVolume;
+    return true;
+   }
+  }
+ }catch(const std::exception& error){Log(std::string("Pelvic contact audio: ")+error.what());return false;}
+ Log("Contact audio could not start: papaAudio.wav");
+ return false;
+}
+
+void StopPelvicAudio(){
+ if(!mouthContact.impactWave.empty())PlaySoundW(nullptr,nullptr,0);
+ mouthContact.impactWave.clear();
+ mouthContact.playingVolume=-1;
+}
+
+void UpdateMouthAudio(bool touching){
+ if(touching==mouthContact.loopRequested)return;
+ mouthContact.loopRequested=touching;
+ if(touching)mouthContact.loopPlaying=PlayContactAudio(L"mouthAudio.wav",SND_LOOP);
+ else if(mouthContact.loopPlaying){
+  PlaySoundW(nullptr,nullptr,0);
+  mouthContact.loopPlaying=false;
+ }
+}
+
 Presets::Json AttachmentState(){
  using enum MouthContact::Attachment;
  return {{"enabled",mouthContact.target==Mouth},{"target",MouthContact::AttachmentKey(mouthContact.target)},
-         {"status",mouthContact.status}};
+         {"status",mouthContact.status},{"pelvic_offset_cm",mouthContact.pelvicOffsetCm},
+         {"pelvic_audio_volume",mouthContact.impactVolume}};
 }
 
 void RemoveMouthLayer(){
@@ -153,6 +207,8 @@ bool PublishMouthFollow(PoseMath::Vector3 pivot,PoseMath::Quaternion rotation){
 }
 
 void ClearMouthBinding(){
+ UpdateMouthAudio(false);
+ mouthContact.rootTouching=false;
  ReleaseMouthFollow();
  mouthContact.faceShapes.clear();
  mouthContact.lowerFace.clear();
@@ -321,16 +377,20 @@ bool BindMouth(){
   if(mouthContact.target==Pelvis){
    auto hips=findUnique("Bip001_Pelvis"),left=findUnique("Bip001_L_Thigh"),
         right=findUnique("Bip001_R_Thigh"),spine=findUnique("Bip001_Spine");
-   Vector3 leftPosition{},rightPosition{},spinePosition{},anchor{};
+   Vector3 leftPosition{},rightPosition{},spinePosition{},anchor{},forward{};
    ReferenceMatrix inverse{};
+   PoseMath::Quaternion bodyRotation{};
    if(!hips||!left||!right||!spine||!Value(WorldToLocal,hips,inverse)||
       !Value(Position,left,leftPosition)||!Value(Position,right,rightPosition)||
-      !Value(Position,spine,spinePosition)||!PelvicAnchor(leftPosition,rightPosition,spinePosition,anchor)){
+      !Value(Position,spine,spinePosition)||!Value(WorldRotation,pose.reverse.root,bodyRotation)||
+      !PoseMath::Normalize(bodyRotation)||!PelvicAnchor(leftPosition,rightPosition,spinePosition,
+       PoseMath::Rotate(bodyRotation,{0,0,1}),anchor,&forward)){
     mouthContact.status="互動角色缺少骨盆定位所需的骨架";
     return false;
    }
    mouthContact.pelvicAnchorLocal=MouthTransformPoint(inverse,anchor);
-   if(!Finite(mouthContact.pelvicAnchorLocal)){
+   mouthContact.pelvicForwardLocal=Subtract(MouthTransformPoint(inverse,Add(anchor,forward)),mouthContact.pelvicAnchorLocal);
+   if(!Finite(mouthContact.pelvicAnchorLocal)||!Finite(mouthContact.pelvicForwardLocal)){
     mouthContact.status="吸附目標骨架姿勢已失效";
     return false;
    }
@@ -493,7 +553,9 @@ void PumpMouth(float dt){
  const EfmiBridge::Mesh* mesh=nullptr;
  for(auto& mod:efmiScan.mods)if(mod.file==mouthContact.meshIni)
   for(auto& candidate:mod.meshes)if(candidate.name==mouthContact.meshName)mesh=&candidate;
- if(!mesh)return;
+ if(!mesh){UpdateMouthAudio(false);mouthContact.rootTouching=false;return;}
+ const bool audioPlaying=!pose.scrubbing&&((!pose.partnerStopped&&!pose.clipPaused)||
+  (pose.controlledClip&&!pose.mainStopped&&!pose.mainPaused));
  auto bufferWorld=[&](Vector3 a){
   return MouthTransformPoint(pelvisWorld,MouthTransformPoint(mouthContact.inverseBind,a));
  };
@@ -528,13 +590,15 @@ void PumpMouth(float dt){
   return published;
  };
  if(mouthContact.target!=Mouth){
+  UpdateMouthAudio(false);
   Vector3 anchor{};
   bool valid=false;
   const bool pelvic=mouthContact.target==Pelvis;
   if(pelvic){
    ReferenceMatrix transform{};
    valid=Living(mouthContact.targetPelvis)&&Value(LocalToWorld,mouthContact.targetPelvis,transform);
-   if(valid)anchor=MouthTransformPoint(transform,mouthContact.pelvicAnchorLocal);
+   if(valid)anchor=MouthTransformPoint(transform,Add(mouthContact.pelvicAnchorLocal,
+    Scale(mouthContact.pelvicForwardLocal,mouthContact.pelvicOffsetCm*.01f)));
   }else{
    const auto [hand,middle]=mouthContact.handAnchorBones;
    Vector3 wristPosition{},middlePosition{};
@@ -554,6 +618,13 @@ void PumpMouth(float dt){
    mouthContact.followRotation=PoseMath::Nlerp(mouthContact.followRotation,rotation,step);
   }
   const bool published=publish();
+  float rootGap=0;
+  if(pelvic&&mouthContact.following){
+   const auto activeTip=published?bufferWorld(RotateAround(pivot,mouthContact.followRotation,tip)):probe.tip;
+   rootGap=RootSurfaceDistance({probe.base,activeTip},anchor);
+   const bool entered=EnterRootContact(rootGap,mouthContact.rootTouching);
+   if(entered&&audioPlaying&&PlayPelvicAudio())++mouthContact.rootAudioPlays;
+  }else mouthContact.rootTouching=false;
   const auto now=GetTickCount64();
   if(!rendererReady)mouthContact.status="DIH 追蹤需要本版內建 EFMI";
   else if(!valid)mouthContact.status="吸附目標骨架姿勢已失效";
@@ -566,7 +637,9 @@ void PumpMouth(float dt){
    mouthContact.lastTrace=now;
    Log("Attachment follow: target="+std::string(AttachmentKey(mouthContact.target))+
        " gate="+FollowGateName(gate)+" distance_cm="+std::to_string(MouthContact::Length(Subtract(anchor,probe.tip))*100)+
-       (pelvic?" reach_cm="+std::to_string(approach.reach*100)+" length_cm="+std::to_string(approach.length*100):"")+
+       (pelvic?" reach_cm="+std::to_string(approach.reach*100)+" length_cm="+std::to_string(approach.length*100)+
+        " root_gap_cm="+std::to_string(rootGap*100)+" root_touch="+std::to_string(mouthContact.rootTouching)+
+        " audio_plays="+std::to_string(mouthContact.rootAudioPlays):"")+
        " submitted="+std::to_string(published)+" gpu_updates="+
        std::to_string(mouthContact.renderCount?mouthContact.renderCount():0));
   }
@@ -624,6 +697,7 @@ void PumpMouth(float dt){
    target=OpeningForThickness(thickness);
   }
  }
+ UpdateMouthAudio(audioPlaying&&rendererReady&&touching);
  mouthContact.opening=target>0?PoseMath::Smooth(mouthContact.opening,target,dt):0;
  auto now=GetTickCount64();
  if(!rendererReady)mouthContact.status="DIH 追蹤需要本版內建 EFMI";

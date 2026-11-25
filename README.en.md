@@ -1,10 +1,10 @@
 # EndfieldAnimationImporter User Guide
 
-> **Standalone launch:** Version 3.4.1 bundles the game host and EFMI appearance loader. No separate EML or XXMI Launcher installation is required. Extract the full package, open EAI.Launcher.exe, and select the game.
+> **Standalone launch:** Version 3.5.3 bundles the game host and EFMI appearance loader. No separate EML or XXMI Launcher installation is required. Extract the full package, open EAI.Launcher.exe, and select the game.
 
 [繁體中文](README.md) | English
 
-Version: 3.4.1 · Windows x64
+Version: 3.5.3 · Windows x64
 
 ## Before You Start
 
@@ -21,7 +21,7 @@ Version: 3.4.1 · Windows x64
 
 Extract the full ZIP to a stable folder, open `EAI.Launcher.exe`, select the game's `Endfield.exe`, and click Launch Game. The package includes the launcher, game host, IL2CPP interfaces, hook service, messaging, and logs. The host enables EAI automatically. In a playable scene, press Num0 and manually connect the game entry point.
 
-The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. You can rename or move the package folder. On the next launch, EAI creates a host index for the current location. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.4.1/<package-path-hash>/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
+The dark sidebar and title bar show the product name and version. The lower log panel shows launch results, launch.log, and host.log, including loading stages and error codes. Sidebar buttons open the data and log folders. The selected game path is saved. You can rename or move the package folder. On the next launch, EAI creates a host index for the current location. If you previously installed EML DLL autostart, uninstall it in EML before using standalone EAI. Launch failures show the loading component's error. Windows requests elevation when the game requires administrator privileges. Host logs are under `%LOCALAPPDATA%/BetterEndfield/Interaction/Standalone/3.5.3/<package-path-hash>/host.log`. Existing settings and animations remain in `%LOCALAPPDATA%/BetterEndfield/Interaction`.
 
 
 ## Quick Start
@@ -144,7 +144,7 @@ Enable **Enable Partner Breast Physics** on the **Breast Physics** page.
 2. Under **External Model Adjustments → Mesh Transform**, drag a supported part's scale, rotation, position, or pivot slider. You can switch parts at any time. Bundled EFMI applies changes live and saves them automatically.
 3. To restore a part, use its mesh reset button. To disable all mesh adjustments in the scanned folder, click **Disable Bridge**.
 
-Drag sliders under **Available Parameters** to preview native INI variables loaded by bundled EFMI. Use **Write Bridge** to save an override in the bridge. Reload EFMI with F10 when a parameter cannot be previewed or after disabling a loaded legacy bridge.
+Drag sliders under **Available Parameters** to preview native INI variables loaded by bundled EFMI. Use **Save Settings** to save an override in the bridge. Reload EFMI with F10 when a parameter cannot be previewed or after disabling a loaded legacy bridge.
 
 ### Mouth Contact (Experimental)
 
@@ -153,6 +153,12 @@ Enable **Mouth Contact** under **External Model Adjustments** in the Num0 or web
 When the DIH approaches the mouth from the front, the entire part rotates around its base and the tip aims at the entrance along a fixed-length arc. Once the DIH mesh touches the lip contact box, its thickness perpendicular to the shaft and the existing opening determine the extra jaw rotation or opening blend shape. Aiming uses the insertion depth of the current pose. The feature uses the poses produced by MMD playback.
 
 The same panel also offers Pelvic Contact, Left-Hand Contact, and Right-Hand Contact. Select one contact target at a time. All contact options start disabled. The new targets use the partner’s bones to estimate the contact point. Pelvic Contact aims the DIH axis at the pelvic anchor within 1.3 times the mesh length from the pivot. The mesh keeps its original length. Hand Contact turns the tip toward the palm. The rotation eases back when the target moves out of reach.
+
+During paired animation playback, the mouth contact sound loops while the meshes touch and stops on separation. Pelvic Contact plays a short sound as the anchor enters the DIH root contact region and rearms after separation. Both sounds are included with EAI.
+
+The appearance catalog and mesh probe results are cached in the local EAI data directory. Opening the page for the first time builds the cache. Later scans reuse unchanged appearances and refresh changed files.
+
+Under Pelvic Contact, adjust the fore-aft offset (−5 to +5 cm, with positive values moving forward) and impact volume (0–100%). The sliders save on release. Set the impact volume to 0% to mute the sound.
 
 ## Complete EFMI Appearance Mods
 

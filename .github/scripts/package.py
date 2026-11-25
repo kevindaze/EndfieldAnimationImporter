@@ -81,6 +81,9 @@ def main():
             files[path.relative_to(ROOT).as_posix()] = path
     for name in ('18.asf', '19.asf', '18_01.amc', '18_02.amc', '19_01.amc', '19_02.amc', 'README.md'):
         files['native/windows-x64/motions/' + name] = motions / name
+    for name in ('mouthAudio.wav', 'papaAudio.wav'):
+        path = 'native/windows-x64/audio/' + name
+        files[path] = ROOT / path
     for name in ('arm_raise_diagnostic.interaction-animation.json', 'arm_rotation_test.interaction-animation.json'):
         files['examples/' + name] = ROOT / 'examples' / name
     for name, path in files.items():

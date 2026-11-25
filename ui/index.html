@@ -34,7 +34,7 @@
 <div id="pageCamera" role="tabpanel" hidden><section><h2>自由相機</h2><label>啟用／關閉快捷鍵：<select id="freeCameraHotkey"></select></label><label><input id="freeCameraHideUi" type="checkbox">啟動相機時隱藏遊戲UI</label><button id="freeCameraReset">重設相機位置</button><p id="freeCameraStatus" role="status"></p><p class="hint">WASD 移動；E 上升／Q 下降；按住滑鼠右鍵調整方向。</p><p class="hint">啟用時攔截遊戲操作；開啟面板時暫停相機操作。</p><p class="hint">關閉自由相機返回遊戲視角；失去焦點時自動關閉。</p></section></div>
 <div id="pageSpawn" role="tabpanel" hidden><section><h2>生成角色白名單</h2><div class="import-grid" style="flex-direction:row;display:grid;grid-template-columns:1fr 1fr"><div><h3>女性</h3><div id="whitelistWomen"></div></div><div><h3>男性</h3><div id="whitelistMen"></div></div></div><button id="saveWhitelist">儲存白名單設定</button></section><section><h2>生成角色</h2><div class="form-line"><label>選擇幹員：<select id="spawnCharacterSelect"></select></label><button id="spawnCharacter">生成</button></div><button id="removeSpawnedCharacter">移除角色</button><p id="spawnCharacterStatus" role="status"></p><p class="hint">生成後自動選為互動角色；同名角色優先使用生成模型。</p></section></div>
 <div id="pageBreast" role="tabpanel" hidden><section><h2>胸部晃動</h2><label><input id="breastEnabled" type="checkbox">啟用互動角色胸部物理</label><fieldset id="breastOptions" disabled><div class="form-line"><label><input id="breastAutomatic" type="checkbox" checked>自動套用到互動角色</label><label><input id="breastAutomaticMain" type="checkbox">自動套用到主控角色</label></div><label>手動選擇套用角色：<select id="breastCharacter"></select></label></fieldset><p id="breastStatus" role="status"></p><p class="hint">兩種自動套用互斥；手動選擇會關閉自動套用。</p></section></div>
-<div id="pageExternal" role="tabpanel" hidden><section><h2>外部模型調整</h2><div class="form-line"><label><input type="checkbox" id="mouthContactEnabled"> 嘴部吸附</label><label><input type="checkbox" id="pelvisAttachmentEnabled"> 小穴吸附</label><label><input type="checkbox" id="leftHandAttachmentEnabled"> 左手吸附</label><label><input type="checkbox" id="rightHandAttachmentEnabled"> 右手吸附</label></div><p id="mouthContactStatus" role="status"></p><p class="hint">已載入的原生 INI 參數可即時預覽。用「寫入橋接」保存，未生效時可重載 EFMI。請停用其他第一人稱／相機模組並重啟遊戲。</p><div class="form-line"><button id="externalScan">重新掃描</button></div><p class="hint">清單由 INI 的網格註解、繪製條件與持久參數建立；尚未驗證哪些配件正在遊戲中顯示。</p><div class="form-line"><button id="externalApply">寫入橋接</button><button id="externalRemove">停用橋接</button></div><p id="externalStatus" role="status"></p><div id="externalList"></div><details><summary>已登錄模型部件</summary><div id="externalModels"></div></details></section></div>
+<div id="pageExternal" role="tabpanel" hidden><section><h2>外部模型調整</h2><div class="form-line"><label><input type="checkbox" id="mouthContactEnabled"> 嘴部吸附</label><label><input type="checkbox" id="pelvisAttachmentEnabled"> 小穴吸附</label><label><input type="checkbox" id="leftHandAttachmentEnabled"> 左手吸附</label><label><input type="checkbox" id="rightHandAttachmentEnabled"> 右手吸附</label></div><label class="row"><span>小穴前後偏移（cm）</span><input type="range" id="pelvicOffset" min="-5" max="5" step="0.1" value="0"><output id="pelvicOffsetValue">0.0</output></label><label class="row"><span>啪啪聲音量（%）</span><input type="range" id="pelvicAudioVolume" min="0" max="100" step="1" value="100"><output id="pelvicAudioVolumeValue">100</output></label><p id="mouthContactStatus" role="status"></p><p class="hint">已載入的原生 INI 參數可即時預覽。按「保存設定」保留調整，未生效時可重載 EFMI。請停用其他第一人稱／相機模組並重啟遊戲。</p><div class="form-line"><button id="externalScan">重新掃描</button></div><p class="hint">清單由 INI 的網格註解、繪製條件與持久參數建立；尚未驗證哪些配件正在遊戲中顯示。</p><div class="form-line"><button id="externalApply">保存設定</button><button id="externalRemove">停用橋接</button></div><p id="externalStatus" role="status"></p><div id="externalList"></div><details><summary>已登錄模型部件</summary><div id="externalModels"></div></details></section></div>
 <script>
 const out=document.getElementById('output'),actionStatus=document.getElementById('actionStatus');const curls=[12,20,12,25,40,25,35,50,30,40,55,30,45,60,35],defaults=[...Array(6).fill(0),...curls,...Array(6).fill(0),...curls];let boneOffsets={},boneNodes=[],boneGeneration=0,scaleAvailable=false;const boneTimers=new Map(),boneJobs=new Set();async function flushBones(){for(const pending of boneTimers.values()){clearTimeout(pending.timer);pending.run()}boneTimers.clear();await Promise.all([...boneJobs])}let values=defaults.slice(),timer,liveTargets=[],liveControlled='',clips=[],draftTarget='chr_0004_pelica',draftAnimation='handshake',supportMode='none',prepared=null,activeSlot=0,blenderFolder='',timeline=null,mainTimeline=null,mainAnimation='none',mainPose='inherit',mainSupport='none';
 let pairedData={items:[],matching:'',can_create:false,can_add:false},operatorRosterData=[];
@@ -111,10 +111,45 @@ function wireExternalControl(mod,control,range,number){
 function renderExternal(data){externalData=data;renderMouthContact(data.mouth_contact);document.getElementById('externalStatus').textContent=data.detail||('重載按鍵：'+(data.reload_key||'尚未找到 EFMI 設定'));const list=document.getElementById('externalList');list.replaceChildren();for(const mod of data.mods||[]){const group=boneGroup(list,mod.name);const file=document.createElement('small');file.textContent=mod.file;group.append(file);const resetMod=document.createElement('button');resetMod.textContent='全部還原預設值';resetMod.onclick=e=>action(e.currentTarget,async()=>{await Promise.all([...externalJobs]);const reply=await send('external_mod_reset',{file:mod.file});renderExternal(reply);return reply});group.append(resetMod);const controls=boneGroup(group,'可用參數 · 即時預覽');for(const c of mod.controls||[]){const row=document.createElement('label');row.className='row';const title=document.createElement('span');title.textContent=c.name;const range=document.createElement('input'),number=document.createElement('input');range.type='range';number.type='number';wireExternalControl(mod,c,range,number);row.append(title,range,number);controls.append(row)}const transforms=boneGroup(group,'網格變形 · 大小／角度／位移');const linked=document.createElement('input');linked.type='checkbox';linked.checked=true;const linkLabel=document.createElement('label');linkLabel.append(linked,'同步同名網格（含 LOD）');transforms.append(linkLabel);const meshNote=document.createElement('p');meshNote.className='hint';meshNote.textContent='模型局部座標；位移／支點 cm、角度 °、大小 倍。支點預設包圍盒中心，可調至配件根部。打包法線／切線尚未重算，大角度或非等比縮放可能影響光照。';transforms.append(meshNote);for(const mesh of mod.meshes||[]){const detail=boneGroup(transforms,mesh.name+(mesh.supported?'':' · 尚未支援'));const reason=document.createElement('small');reason.textContent=mesh.reason||'缺少可辨識的索引與頂點資源';detail.append(reason);let built=false;detail.ontoggle=()=>{if(!detail.open||built||!mesh.supported)return;built=true;const reset=document.createElement('button');reset.textContent='還原此網格（含同名 LOD）';reset.className='mesh-child-reset';reset.onclick=e=>action(e.currentTarget,async()=>{await Promise.all([...externalJobs]);const reply=await send('external_mesh_reset',{index:mesh.index,key:mesh.key});renderExternal(reply);return reply});detail.append(reset);for(let field=0;field<12;field++){const row=document.createElement('label');row.className='row';const title=document.createElement('span');title.textContent=(field<3?'位移 ':field<6?'角度 ':field<9?'大小 ':'支點 ')+'XYZ'[field%3];const range=document.createElement('input'),number=document.createElement('input');range.type='range';number.type='number';let queued=null,job=null;const submit=input=>{const value=Number(input.value);if(!input.value.trim()||!Number.isFinite(value)||value<Number(input.min)||value>Number(input.max))return;if(input===range)number.value=value;else range.value=value;if(queued?.value===value||(!job&&mesh.values[field]===value))return;queued={value,linked:linked.checked};if(job)return;job=(async()=>{while(queued){const update=queued;queued=null;const reply=await send('external_mesh_set',{index:mesh.index,key:mesh.key,field,...update});mesh.values[field]=update.value;document.getElementById('externalStatus').textContent=reply.detail||'網格待寫入';}})();externalJobs.add(job);job.catch(error=>{queued=null;range.value=number.value=mesh.values[field];document.getElementById('externalStatus').textContent=String(error);}).finally(()=>{externalJobs.delete(job);job=null;});};for(const input of [range,number]){input.min=field<3?-200:field<6?-180:field<9?.1:-10000;input.max=field<3?200:field<6?180:field<9?3:10000;input.step=field<3?.1:field<6?1:field<9?.01:.1;input.value=mesh.values[field];input.setAttribute('aria-label',mesh.name+' '+title.textContent);input.onchange=()=>submit(input);}range.oninput=()=>submit(range);row.append(title,range,number);detail.append(row)}}}
 const meshes=boneGroup(group,'配件／網格 · '+(mod.meshes||[]).length+' 個');for(const mesh of mod.meshes||[]){const item=document.createElement('p');item.textContent=mesh.name;const note=document.createElement('small');note.textContent='繪製條件：'+(mesh.condition||'未辨識')+' · '+(mesh.resource||'資源未辨識');meshes.append(item,note)}}for(const error of data.errors||[]){const text=document.createElement('p');text.textContent=error;list.append(text)}}
 const attachmentControls={mouth:'mouthContactEnabled',pelvis:'pelvisAttachmentEnabled',left_hand:'leftHandAttachmentEnabled',right_hand:'rightHandAttachmentEnabled'};
+function pelvicTuningControl(id,field,key,decimals){
+  const input=document.getElementById(id);
+  const output=document.getElementById(id+'Value');
+  let queued=null,job=null;
+  const display=value=>{input.value=value;output.textContent=Number(value).toFixed(decimals);};
+  const submit=save=>{
+    const value=Number(input.value);
+    display(value);
+    queued={value,save};
+    if(job)return job;
+    job=(async()=>{
+      try{
+        while(queued){
+          const update=queued;
+          queued=null;
+          const reply=await send('external_pelvic_tuning',{field,...update});
+          if(reply.saved===false)throw Error('儲存失敗，請查看資料夾權限');
+        }
+      }catch(error){
+        queued=null;
+        document.getElementById('externalStatus').textContent=String(error);
+      }finally{job=null;}
+    })();
+    return job;
+  };
+  input.oninput=()=>submit(false);
+  input.onchange=()=>submit(true);
+  return data=>{
+    if(!job&&document.activeElement!==input&&Number.isFinite(data[key]))display(data[key]);
+  };
+}
+const renderPelvicOffset=pelvicTuningControl('pelvicOffset','offset','pelvic_offset_cm',1);
+const renderPelvicVolume=pelvicTuningControl('pelvicAudioVolume','volume','pelvic_audio_volume',0);
 function renderMouthContact(data){
   if(!data)return;
   const active=data.target||(data.enabled?'mouth':'off');
   for(const [target,id] of Object.entries(attachmentControls))document.getElementById(id).checked=target===active;
+  renderPelvicOffset(data);
+  renderPelvicVolume(data);
   document.getElementById('mouthContactStatus').textContent=data.status||'';
 }
 for(const [target,id] of Object.entries(attachmentControls)){

@@ -142,7 +142,7 @@ inline bool PalmAxes(Vector3 wrist,Vector3 middle,Vector3 index,Vector3 little,b
 }
 
 inline bool EnterRootContact(float distance,bool& touching){
- constexpr float enterDistance=.022f,releaseDistance=.032f;
+ constexpr float enterDistance=.032f,releaseDistance=.042f;
  const bool wasTouching=touching;
  touching=std::isfinite(distance)&&distance>=0&&distance<=(wasTouching?releaseDistance:enterDistance);
  return touching&&!wasTouching;

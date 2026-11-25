@@ -4,7 +4,7 @@
 
 [繁體中文](README.md) | English
 
-Version: 3.6.5 · Windows x64
+Version: 3.6.7 · Windows x64
 
 ## Before You Start
 
@@ -120,7 +120,7 @@ Load animation JSON through **Animation Import → Import Partner JSON**. Recipi
 
 ## Free Camera
 
-Connect the game entry, check the toggle shortcut under **Free Camera**, close the panel, and press the shortcut to enable it. Press it again or press **Esc** to exit. The default is **F9** and can be changed. While Free Camera is active, press **1–9 (number row or numpad)** to play interaction presets; press the same key to stop or another key to switch.
+Connect to the game, then select **Enable Free Camera** in the in-game Free Camera tab. The panel will collapse and return focus to the game. You can also close the panel and use the shortcut. Press the shortcut again or press **Esc** to exit. The default shortcut is **F9** and can be changed. While Free Camera is active, press **1–9 (number row or numpad)** to play interaction presets; press the same key to stop or another key to switch.
 
 | Control | Purpose |
 | --- | --- |

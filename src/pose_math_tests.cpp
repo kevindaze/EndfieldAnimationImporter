@@ -182,12 +182,12 @@ int main(){
  check(MouthContact::FollowPelvis({pelvicProbe.base,pelvicProbe.base},pelvicProbe.tip).gate==MouthContact::FollowGate::Invalid,
        "zero-length geometry cannot acquire a pelvic anchor");
  bool rootTouching=false;
- check(!MouthContact::EnterRootContact(.03f,rootTouching)&&!rootTouching&&
-       MouthContact::EnterRootContact(.02f,rootTouching)&&rootTouching,
+ check(!MouthContact::EnterRootContact(.033f,rootTouching)&&!rootTouching&&
+       MouthContact::EnterRootContact(.032f,rootTouching)&&rootTouching,
        "a root contact fires only when entering the contact distance");
  check(!MouthContact::EnterRootContact(.020f,rootTouching)&&rootTouching&&
-       !MouthContact::EnterRootContact(.028f,rootTouching)&&rootTouching&&
-       !MouthContact::EnterRootContact(.034f,rootTouching)&&!rootTouching&&
+       !MouthContact::EnterRootContact(.038f,rootTouching)&&rootTouching&&
+       !MouthContact::EnterRootContact(.043f,rootTouching)&&!rootTouching&&
        MouthContact::EnterRootContact(.02f,rootTouching),
        "a root contact fires again only after separation");
  const MouthContact::Probe rootProbe{{0,0,0},{0,0,.194f}};
@@ -195,12 +195,12 @@ int main(){
  const auto rootContact=[&](Vector3 point){
   return MouthContact::EnterRootContact(MouthContact::RootSurfaceDistance(rootProbe,point),rootTouching);
  };
- check(!rootContact({0,0,.14f})&&!rootContact({.03f,0,.07f})&&
+ check(!rootContact({0,0,.14f})&&!rootContact({.034f,0,.07f})&&
        rootContact({0,0,.085f})&&rootTouching,
        "sound can start on the estimated exposed root while excluding midshaft and lateral approaches");
  check(!rootContact({0,0,.02f})&&rootTouching&&
        !rootContact({0,0,.09f})&&rootTouching&&
-       !rootContact({0,0,.105f})&&!rootTouching&&rootContact({0,0,.085f}),
+       !rootContact({0,0,.112f})&&!rootTouching&&rootContact({0,0,.085f}),
        "deeper motion and withdrawal through the root region do not retrigger before separation");
  check(MouthContact::JawAngle(.0275f,.03f,.07f)==0&&
        MouthContact::JawAngle(.0275f,.005f,.07f)>.2f&&MouthContact::JawAngle(.10f,0,.035f)<=.42f,

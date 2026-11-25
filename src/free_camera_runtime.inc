@@ -90,7 +90,7 @@ bool BeginFreeCamera(){
  if(!hook){freeCamera.status="請先手動連接遊戲入口";return false;}
  if(!FreeCameraInput::ready||!InstallCameraInput()||!InstallCameraOutput()){freeCamera.status="自由相機輸入攔截未接通，未啟用";Log("Free camera activation rejected: required input/output hook unavailable");return false;}
  auto pins=std::make_unique<Pins>();auto camera=pins->Keep(Call(CameraMain));auto transform=camera?pins->Keep(Call(ComponentTransform,camera)):nullptr;PoseMath::Vector3 position{};PoseMath::Quaternion rotation{};
- if(!Living(camera)||!Living(transform)||!Value(Position,transform,position)||!Value(WorldRotation,transform,rotation)||!freeCamera.view.Capture(position,rotation)){freeCamera.status="找不到可控制的遊戲相機，未啟用";return false;}
+ if(!Living(camera)||!Living(transform)||!Value(Position,transform,position)||!Value(WorldRotation,transform,rotation)||!freeCamera.view.Capture(position,rotation)){freeCamera.status="找不到可控制的遊戲相機，未啟用";Log("Free camera activation rejected: no valid gameplay camera or transform");return false;}
  auto input=pins->Keep(cameraInputManager.load());int group=0;bool wasEnabled=false;void* arguments[]{&group};
  if(!input||!Value(InputRootGroup,input,group)||!Value(InputGroupEnabled,input,wasEnabled,arguments)||!WriteValue(InputToggleAll,input,false)){freeCamera.status="自由相機輸入攔截未接通，未啟用";Log("Free camera activation rejected: game input root group unavailable");return false;}
  bool stillEnabled=true;if(!Value(InputGroupEnabled,input,stillEnabled,arguments)||stillEnabled){WriteValue(InputToggleAll,input,wasEnabled);freeCamera.status="自由相機輸入攔截未接通，未啟用";Log("Free camera activation rejected: input group disable not confirmed");return false;}
@@ -114,7 +114,12 @@ void ApplyFreeCameraView(){
  if(!WriteValue(SetPosition,freeCamera.transform,freeCamera.view.position)||!WriteValue(SetWorldRotation,freeCamera.transform,freeCamera.view.Rotation()))StopFreeCamera("自由相機寫入失敗，已關閉");else{freeCamera.wrote=true;freeCamera.writtenPosition=freeCamera.view.position;freeCamera.writtenRotation=freeCamera.view.Rotation();}
 }
 void PumpFreeCamera(float dt){
- int toggles=FreeCameraInput::toggleRequests.exchange(0);if(toggles%2)freeCamera.request=freeCamera.enabled?0:1;
+ const int toggles=FreeCameraInput::toggleRequests.exchange(0);
+ if(toggles%2){
+  freeCamera.request=freeCamera.enabled?0:1;
+  Log(std::string("Free camera shortcut requested ")+(freeCamera.enabled?"disable":"enable")+
+   "; key="+std::to_string(FreeCameraInput::hotkey.load()));
+ }
  if(FreeCameraInput::escapeRequested.exchange(false)&&freeCamera.enabled)freeCamera.request=0;
  if(freeCamera.request==0){freeCamera.request=-1;StopFreeCamera();}
  if(freeCamera.request==1&&GameFocused()){freeCamera.request=-1;if(!freeCamera.enabled)BeginFreeCamera();}

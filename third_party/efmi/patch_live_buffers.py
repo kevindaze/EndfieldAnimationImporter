@@ -4,10 +4,10 @@ from pathlib import Path
 
 root = Path(sys.argv[1]) / "DirectX11"
 
-def edit(file, old, new):
+def edit(file, old, new, *, count=1):
     path = root / file
     source = path.read_text(encoding="utf-8-sig")
-    if source.count(old) != 1:
+    if source.count(old) != count:
         raise SystemExit(f"Unexpected XXMI source in {file}")
     path.write_text(source.replace(old, new), encoding="utf-8-sig")
 
@@ -23,10 +23,14 @@ edit("CommandList.h", "\tvoid expire(ID3D11Device *mOrigDevice1, ID3D11DeviceCon
 
 edit("CommandList.cpp", "void CustomResource::LoadBufferFromFile(ID3D11Device *mOrigDevice1)", """// Transient position buffers published by EAI in the same process.
 static SRWLOCK eai_follow_lock = SRWLOCK_INIT;
-static wstring eai_follow_filename;
-static std::vector<unsigned char> eai_follow_data;
-static ULONGLONG eai_follow_generation = 0;
-static volatile LONG eai_follow_active = 0;
+struct EaiFollowBuffer {
+    wstring filename;
+    std::vector<unsigned char> bytes;
+};
+static EaiFollowBuffer eai_follow_pending;
+static EaiFollowBuffer eai_follow_frame;
+static bool eai_follow_dirty = false;
+static ULONGLONG eai_follow_frame_generation = 0;
 static volatile LONG64 eai_follow_consumed = 0;
 
 static wstring EaiFullPath(const wchar_t *path)
@@ -55,13 +59,12 @@ extern "C" __declspec(dllexport) BOOL WINAPI EaiSubmitMeshFollow(
         try {
             if (data) {
                 auto bytes = static_cast<const unsigned char*>(data);
-                eai_follow_data.assign(bytes, bytes + size);
+                eai_follow_pending.bytes.assign(bytes, bytes + size);
             } else {
-                eai_follow_data.clear();
+                eai_follow_pending.bytes.clear();
             }
-            eai_follow_filename.swap(path);
-            ++eai_follow_generation;
-            InterlockedExchange(&eai_follow_active, data ? 1 : 0);
+            eai_follow_pending.filename.swap(path);
+            eai_follow_dirty = true;
         } catch (...) {
             ReleaseSRWLockExclusive(&eai_follow_lock);
             return FALSE;
@@ -73,6 +76,21 @@ extern "C" __declspec(dllexport) BOOL WINAPI EaiSubmitMeshFollow(
     }
 }
 
+// Present and the immediate context run on the render thread. Freeze one
+// position buffer for the next frame so the depth and shading passes agree.
+void EaiLatchMeshFollow()
+{
+    if (!TryAcquireSRWLockExclusive(&eai_follow_lock))
+        return;
+    if (eai_follow_dirty) {
+        eai_follow_frame.filename.swap(eai_follow_pending.filename);
+        eai_follow_frame.bytes.swap(eai_follow_pending.bytes);
+        ++eai_follow_frame_generation;
+        eai_follow_dirty = false;
+    }
+    ReleaseSRWLockExclusive(&eai_follow_lock);
+}
+
 extern "C" __declspec(dllexport) ULONGLONG WINAPI EaiMeshFollowUpdates()
 {
     return static_cast<ULONGLONG>(InterlockedCompareExchange64(&eai_follow_consumed, 0, 0));
@@ -82,52 +100,44 @@ extern "C" __declspec(dllexport) ULONGLONG WINAPI EaiMeshFollowUpdates()
 // The render thread updates the existing buffer so aliases remain valid.
 void CustomResource::RefreshEaiBuffer(ID3D11DeviceContext *context)
 {
-    if (!resource || !context || filename.empty())
+    if (!resource || !context || filename.empty() || context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
         return;
-    const bool follow = InterlockedCompareExchange(&eai_follow_active, 0, 0) != 0;
-    const auto now = GetTickCount64();
-    if ((follow || eai_follow_applied) && context->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE &&
-        TryAcquireSRWLockShared(&eai_follow_lock)) {
-        bool matches = false;
-        if (follow && !eai_follow_data.empty()) {
-            // Most render resources have a different basename, so only resolve
-            // the absolute path for candidates.
-            const auto first = filename.find_last_of(L"/\\\\");
-            const auto second = eai_follow_filename.find_last_of(L"/\\\\");
-            const auto native_name = filename.c_str() + (first == wstring::npos ? 0 : first + 1);
-            const auto follow_name = eai_follow_filename.c_str() + (second == wstring::npos ? 0 : second + 1);
-            try {
-                matches = !_wcsicmp(native_name, follow_name) &&
-                    !_wcsicmp(EaiFullPath(filename.c_str()).c_str(), eai_follow_filename.c_str());
-            } catch (...) {}
-            if (matches && (resource != eai_follow_resource || eai_follow_generation != ::eai_follow_generation ||
-                            !eai_follow_applied)) {
-                D3D11_RESOURCE_DIMENSION type{};
-                resource->GetType(&type);
-                if (type == D3D11_RESOURCE_DIMENSION_BUFFER) {
-                    D3D11_BUFFER_DESC desc{};
-                    static_cast<ID3D11Buffer*>(resource)->GetDesc(&desc);
-                    if (desc.Usage == D3D11_USAGE_DEFAULT && desc.ByteWidth == eai_follow_data.size()) {
-                        context->UpdateSubresource(resource, 0, nullptr, eai_follow_data.data(), 0, 0);
-                        eai_follow_resource = resource;
-                        eai_follow_generation = ::eai_follow_generation;
-                        eai_follow_applied = true;
-                        InterlockedIncrement64(&eai_follow_consumed);
-                    }
-                }
+    const auto& follow = eai_follow_frame;
+    bool matches = false;
+    if (!follow.bytes.empty()) {
+        // Resolve the absolute path only for a candidate basename.
+        const auto first = filename.find_last_of(L"/\\\\");
+        const auto second = follow.filename.find_last_of(L"/\\\\");
+        const auto native_name = filename.c_str() + (first == wstring::npos ? 0 : first + 1);
+        const auto follow_name = follow.filename.c_str() + (second == wstring::npos ? 0 : second + 1);
+        try {
+            matches = !_wcsicmp(native_name, follow_name) &&
+                !_wcsicmp(EaiFullPath(filename.c_str()).c_str(), follow.filename.c_str());
+        } catch (...) {}
+    }
+    if (matches) {
+        if (eai_follow_applied && resource == eai_follow_resource &&
+            eai_follow_generation == eai_follow_frame_generation)
+            return;
+        D3D11_RESOURCE_DIMENSION type{};
+        resource->GetType(&type);
+        if (type == D3D11_RESOURCE_DIMENSION_BUFFER) {
+            D3D11_BUFFER_DESC desc{};
+            static_cast<ID3D11Buffer*>(resource)->GetDesc(&desc);
+            if (desc.Usage == D3D11_USAGE_DEFAULT && desc.ByteWidth == follow.bytes.size()) {
+                context->UpdateSubresource(resource, 0, nullptr, follow.bytes.data(), 0, 0);
+                eai_follow_resource = resource;
+                eai_follow_generation = eai_follow_frame_generation;
+                eai_follow_applied = true;
+                InterlockedIncrement64(&eai_follow_consumed);
+                return;
             }
         }
-        ReleaseSRWLockShared(&eai_follow_lock);
-        if (matches && eai_follow_applied)
-            return;
-    } else if (eai_follow_applied) {
-        return;
     }
+    const auto now = GetTickCount64();
     if (now < eai_buffer_next_check && !eai_follow_applied)
         return;
     eai_buffer_next_check = now + 33;
-    if (context->GetType() != D3D11_DEVICE_CONTEXT_IMMEDIATE)
-        return;
 
     D3D11_RESOURCE_DIMENSION type{};
     resource->GetType(&type);
@@ -193,7 +203,8 @@ edit("CommandList.cpp", "\t\t\tcustom_resource->Substantiate(mOrigDevice1, bind_
 edit("CommandList.h", "extern CommandListVariables command_list_globals;",
      "extern CommandListVariables command_list_globals;\n"
      "void EaiRefreshIniPreviewRegistry();\n"
-     "void EaiApplyIniPreviews();")
+     "void EaiApplyIniPreviews();\n"
+     "void EaiLatchMeshFollow();")
 edit("CommandList.cpp", '#include "CommandList.h"',
      '#include "CommandList.h"\n#include <cmath>\n#include <mutex>\n#include <set>')
 edit("CommandList.cpp", "std::vector<CommandListVariable*> persistent_variables;", r"""std::vector<CommandListVariable*> persistent_variables;
@@ -254,3 +265,9 @@ edit("IniHandler.cpp", "\tParseConstantsSection();", "\tParseConstantsSection();
 edit("HackerDXGI.cpp", "\tRunCommandList(mHackerDevice, mHackerContext, &G->present_command_list, NULL, false);",
      "\tEaiApplyIniPreviews();\n"
      "\tRunCommandList(mHackerDevice, mHackerContext, &G->present_command_list, NULL, false);")
+
+edit("HackerDXGI.cpp", "\t\tRunCommandList(mHackerDevice, mHackerContext, &G->post_present_command_list, NULL, true);\n\n\t\tif (profiling)",
+     "\t\tif (SUCCEEDED(hr))\n"
+     "\t\t\tEaiLatchMeshFollow();\n"
+     "\t\tRunCommandList(mHackerDevice, mHackerContext, &G->post_present_command_list, NULL, true);\n\n\t\tif (profiling)",
+     count=2)

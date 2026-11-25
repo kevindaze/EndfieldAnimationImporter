@@ -392,6 +392,7 @@ inline std::wstring Translate(const std::wstring& text) {
   {L"主控動畫缺失",L"Controlled Animation Missing"},
   {L"作用於主控。",L"Applies to the controlled character."},
   {L"啟用自由相機",L"Enable Free Camera"},
+  {L"關閉自由相機",L"Disable Free Camera"},
   {L"重設相機位置",L"Reset Camera Position"},
   {L"主控動畫列表",L"Main Animation List"},
   {L"互動動畫列表",L"Partner Animation List"},

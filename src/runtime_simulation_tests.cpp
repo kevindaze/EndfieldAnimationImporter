@@ -235,6 +235,39 @@ int main(){
  boneTarget=Bones::Settings{};selectedClip="absolute_test";
  auto absolute=Presets::Json{{"format","endfield-interaction-animation"},{"version",2},{"rotation_space","absolute_local"},{"target_character","chr_0004_pelica"},{"id","absolute_test"},{"name","absolute test"},{"duration",2},{"distance",1.2},{"actors",Presets::Json::array({{{"role","partner"},{"tracks",Presets::Json::array({{{"bone","Bip001_Head"},{"keys",Presets::Json::array({{{"time",0},{"rotation",{0,.173648f,0,.984808f}},{"position",{0,.3f,0}}},{{"time",2},{"rotation",{0,.173648f,0,.984808f}},{"position",{0,.3f,0}}}})}}})}}})}};
  ImportedAnimation::Clip absoluteClip;Check(absoluteClip.Read(absolute)&&absoluteClip.absolute&&absoluteClip.tracks.size()==1,"v2 parses one animated partner with absolute local rotation and position");auto invalidAbsolute=absolute;invalidAbsolute["actors"][0]["role"]="controlled";Check(!absoluteClip.Read(invalidAbsolute),"v2 target binding cannot be assigned to controlled actor");invalidAbsolute=absolute;invalidAbsolute["actors"][0]["tracks"][0]["keys"][1].erase("position");Check(!absoluteClip.Read(invalidAbsolute),"mixed positional key presence rejected atomically");Check(ImportAnimation(absolute),"absolute FBX result imports");presetBank.slots[0].enabled=true;presetBank.slots[0].controlled="chr_0003_endminf";presetBank.slots[0].animation="clip:absolute_test";presetBank.slots[0].target="chr_0004_pelica";presetBank.slots[0].bones=Bones::Settings{};Check(PreparePreset(0),"absolute preview selects target");auto oldTargetRotation=targetHead.rotation,oldMainRotation=head.rotation,oldMainHand=hand.rotation;auto oldTargetPosition=targetHead.position;targetHead.rotation=Handshake::XYZ(0,40,0);auto targetStart=targetHead.rotation;
+ {
+  auto& track=animationLibrary.at("absolute_test")->tracks.front();
+  const auto previousBone=track.bone;
+  track.bone=otherFore.name;
+  Object duplicateFore{otherFore.name,&targetRoot};
+  targetRoot.children.push_back(&duplicateFore);
+  Check(!BeginPose(Mode::Custom)&&panelStatus.find(otherFore.name)!=std::string::npos,
+        "ambiguous legacy track identifies the unresolved bone");
+  {
+   Pins pathPins;
+   std::vector<Pose::FullBone> catalog;
+   Check(WalkBones(&targetRoot,1,pathPins,catalog,true),"build catalog for path binding");
+   for(const auto& bone:catalog)if(bone.bone==&otherFore)track.bonePath=bone.info.key;
+  }
+  Check(!track.bonePath.empty()&&BeginPose(Mode::Custom)&&
+        std::any_of(pose.customBones.begin(),pose.customBones.end(),[&](const auto& bone){return bone.bone==&otherFore;}),
+        "same-character track path selects the intended node despite duplicate name");
+  StopPose("path binding restore",true);
+  track.bonePath.clear();
+  track.bone=previousBone;
+  targetRoot.children.pop_back();
+ }
+ {
+  Object actorRoot{"character"}, bodyRoot{"Root",&actorRoot}, rig{"Bip001",&bodyRoot};
+  Object bodyNeck{"Bip001_Neck",&rig}, bodyHead{"Bip001_Head",&bodyNeck};
+  Object attachment{"Soldier_Root",&bodyRoot}, copy{"Bip001",&attachment};
+  Object copyNeck{"Bip001_Neck",&copy}, copyHead{"Bip001_Head",&copyNeck};
+  actorRoot.children={&bodyRoot}; bodyRoot.children={&attachment,&rig};
+  rig.children={&bodyNeck}; bodyNeck.children={&bodyHead}; attachment.children={&copy};
+  copy.children={&copyNeck}; copyNeck.children={&copyHead};
+  Pins bodyPins;
+  Check(FindBodyHead(&actorRoot,bodyPins)==&bodyHead,"actor head takes precedence over attached duplicate rig");
+ }
  auto nearbyPartnerPosition=targetRoot.position;
  targetRoot.position={1000,50,-1000};
  Check(BeginPose(Mode::Custom),"distant party partner starts imported animation despite distance and height");

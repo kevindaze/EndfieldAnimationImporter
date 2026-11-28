@@ -37,7 +37,7 @@ Matrix Rigid(const Matrix& matrix) {
 }
 
 struct TargetBone {
-    std::string name;
+    std::string name, key;
     Matrix bind{},local{};
     int parent=-1;
     bool weighted=false;
@@ -64,12 +64,30 @@ TargetSkeleton ReadTarget(const Json& reference,int actor,const Pose& source) {
     TargetSkeleton target;
     std::unordered_map<std::string,const Json*> nodes;
     std::map<std::string,std::string> mapped;
+    const auto prefix=std::to_string(actor)+"|";
+    std::vector<std::string> skeletons;
     for (const auto& bone : reference.at("bones")) {
         if (bone.at("actor")!=actor) continue;
         const auto key=bone.at("key").get<std::string>();
         const auto name=bone.at("name").get<std::string>();
         if (!nodes.emplace(key,&bone).second) throw std::runtime_error("Duplicate target bone key");
-        if (source.contains(name)&&!mapped.emplace(name,key).second) throw std::runtime_error("Ambiguous target bone: "+name);
+        if (name=="Bip001") skeletons.push_back(key);
+    }
+    std::string primary;
+    if (skeletons.size()>1) {
+        for (const auto& key : skeletons) {
+            if (key!=prefix+"Root[0]/Bip001[0]"&&key!=prefix+"Bip001[0]") continue;
+            if (!primary.empty()) throw std::runtime_error("Ambiguous primary skeleton");
+            primary=key;
+        }
+    }
+    for (const auto& [key,bone] : nodes) {
+        const auto name=bone->at("name").get<std::string>();
+        if (!source.contains(name)) continue;
+        if (!primary.empty()&&std::any_of(skeletons.begin(),skeletons.end(),[&](const auto& branch) {
+            return branch!=primary&&(key==branch||key.starts_with(branch+"/"));
+        })) continue;
+        if (!mapped.emplace(name,key).second) throw std::runtime_error("Ambiguous target bone: "+name);
     }
     if (nodes.empty()||nodes.size()>3000) throw std::runtime_error("Invalid target skeleton size");
     std::unordered_map<std::string,int> indices;
@@ -83,7 +101,7 @@ TargetSkeleton ReadTarget(const Json& reference,int actor,const Pose& source) {
         const std::string parentKey=parentValue!=bone->end()&&parentValue->is_string()?parentValue->get<std::string>():"";
         const auto parent=self(self,parentKey);
         const int index=int(target.bones.size());
-        target.bones.push_back({bone->at("name").get<std::string>(),{},{},parent,false,bone});
+        target.bones.push_back({bone->at("name").get<std::string>(),key,{},{},parent,false,bone});
         indices[key]=index;
         visiting.erase(key);
         return index;
@@ -99,6 +117,54 @@ TargetSkeleton ReadTarget(const Json& reference,int actor,const Pose& source) {
             if (b.weighted) continue;
             b.bind=Rigid(Mul(toModel,Inverse(ReadMatrix(bone.at("inverse_bind_matrix")))));
             b.weighted=true;
+        }
+    }
+    // Reconstruct a driver only from consistent skinned child bind frames.
+    for (auto& driver : target.bones) {
+        if (driver.weighted||!Required(driver.name)||!driver.capture->contains("world_matrix")) continue;
+        std::optional<Matrix> bind;
+        bool agrees=true;
+        int contributing=0;
+        for (const auto& [key, child] : nodes) {
+            const auto parent=child->find("parent_key");
+            if (parent==child->end()||!parent->is_string()||*parent!=driver.key) continue;
+            Matrix inverseLink=ufbx_identity_matrix;
+            const bool verified=driver.name=="Bip001_Pelvis"&&child->contains("verified_local_bind");
+            if (verified) {
+                const auto& link=child->at("verified_local_bind");
+                const auto p=link.at("position").get<std::array<double,3>>();
+                const auto q=link.at("rotation_xyzw").get<std::array<double,4>>();
+                inverseLink=Inverse(Transform({p[0],p[1],p[2]},Unit(Quat{q[0],q[1],q[2],q[3]})));
+            } else {
+                if ((child->at("name")!=driver.name+"_SP_twist_0"&&child->at("name")!=driver.name+"_bend_jnt")||
+                    !child->contains("world_matrix")) continue;
+                const auto driverWorld=ReadMatrix(driver.capture->at("world_matrix"));
+                const auto childWorld=ReadMatrix(child->at("world_matrix"));
+                bool coincident=true;
+                for (int col=0;col<4;++col)
+                    for (int row=0;row<3;++row)
+                        coincident&=std::abs(driverWorld.cols[col].v[row]-childWorld.cols[col].v[row])<=1e-4;
+                if (!coincident) continue;
+            }
+            bool observed=false;
+            for (const auto* palette : palettes) {
+                for (const auto& bone : palette->at("bones")) {
+                    if (bone.at("key")!=key) continue;
+                    const auto toModel=Mul(ReadMatrix(palette->at("root_world_to_local")),
+                                           ReadMatrix(palette->at("renderer_local_to_world")));
+                    const auto candidate=Rigid(Mul(Mul(toModel,Inverse(ReadMatrix(bone.at("inverse_bind_matrix")))),inverseLink));
+                    observed=true;
+                    if (!bind) bind=candidate;
+                    for (int col=0;col<4;++col)
+                        for (int row=0;row<3;++row)
+                            agrees&=std::abs(bind->cols[col].v[row]-candidate.cols[col].v[row])<=1e-3;
+                }
+            }
+            contributing+=observed;
+        }
+        if (bind&&agrees&&contributing>=(driver.name=="Bip001_Pelvis"?3:1)) {
+            driver.bind=*bind;
+            driver.weighted=true;
         }
     }
     const auto inverseRoot=ReadMatrix(palettes.front()->at("root_world_to_local"));
@@ -117,7 +183,12 @@ TargetSkeleton ReadTarget(const Json& reference,int actor,const Pose& source) {
         b.local=b.parent<0?b.bind:Mul(Inverse(target.bones[b.parent].bind),b.bind);
         if (b.weighted&&source.contains(b.name)) target.namedBind[b.name]=b.bind;
     }
-    RequireBody(target.namedBind);
+    try { RequireBody(target.namedBind); }
+    catch (const std::runtime_error& error) {
+        const auto role=actor?"partner":"controlled";
+        throw std::runtime_error(std::string("Target ")+role+" ("+
+            reference.at(role).get<std::string>()+"): "+error.what());
+    }
     return target;
 }
 
@@ -243,7 +314,7 @@ Json Retarget(const Motion& motion,const TargetSkeleton& target,const Pose& sour
         auto keys=EncodeSamples(samples[i],name=="Bip001_Pelvis");
         keyCount+=keys.size();
         if (keyCount>1000000) throw std::runtime_error("Animation exceeds one million retained keys; split the source animation");
-        tracks.push_back({{"bone",name},{"keys",std::move(keys)}});
+        tracks.push_back({{"bone",name},{"bone_path",target.bones[i].key},{"keys",std::move(keys)}});
     }
     Json clip{{"format","endfield-interaction-animation"},{"version",2},{"rotation_space","absolute_local"},
               {"target_character",character},{"id",id},{"name",label},{"duration",float(duration)},{"distance",1.2f},
@@ -297,7 +368,10 @@ Json Convert(const fs::path& source,const fs::path& output,const fs::path& refer
     auto files=Json::array();
     const auto write=[&](const auto& motion,const std::string& suffix,const std::string& name) {
         const auto sourceBind=motion.Bind();
-        RequireBody(sourceBind);
+        try { RequireBody(sourceBind); }
+        catch (const std::runtime_error& error) {
+            throw std::runtime_error(std::string("Source animation: ")+error.what());
+        }
         const auto target=ReadTarget(reference,actor,sourceBind);
         const auto clipId=id.str()+suffix;
         const auto filename=clipId+".interaction-animation.json";

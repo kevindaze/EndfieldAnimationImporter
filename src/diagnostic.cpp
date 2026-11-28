@@ -216,11 +216,11 @@ struct Pose {
  PoseMath::Vector3 managerContact[2]{},managerBend[2]{};bool managerContactReady[2]{};float managerTangent[2]{};std::vector<ArmBone> arms;PoseMath::Vector3 managerBodyRight{},managerBodyForward{};void* waist=nullptr;void* waistSpine=nullptr;float tangentSign=0;PoseMath::Vector3 bendNormalLocal{};
  struct Twist{size_t finger=0;void* upper=nullptr;PoseMath::Vector3 axis{};PoseMath::Quaternion upperRest{},offset{};float weight=.5f;};std::vector<Twist> twists;std::vector<FingerControl> fingers;PoseMath::Vector3 palmNormal[2]{};
  PoseMath::Vector3 contact{};bool contactReady=false;uint64_t contactLog=0;
- struct CustomBone {void* bone=nullptr;void* root=nullptr;uint64_t lease=0;PoseMath::Quaternion rest{},base{},written{};bool wrote=false;size_t track=0;int actor=0,field=-1;void* parent=nullptr;PoseMath::Vector3 positionBase{},positionWritten{};bool positionWrote=false,holdPosition=false,holdRotation=false;PoseMath::Vector3 heldPosition{},axis{};};
+ struct CustomBone {void* bone=nullptr;void* root=nullptr;uint64_t lease=0;PoseMath::Quaternion rest{},base{},written{};bool wrote=false;size_t track=0;int actor=0,field=-1;void* parent=nullptr;PoseMath::Vector3 positionBase{},positionWritten{};bool positionWrote=false,holdPosition=false,holdRotation=false;PoseMath::Vector3 heldPosition{},axis{};std::string referenceKey;};
  struct FullBone {BoneInfo info;void* bone=nullptr;void* root=nullptr;uint64_t lease=0;PoseMath::Vector3 basePosition{},writtenPosition{},baseScale{1,1,1},writtenScale{1,1,1};PoseMath::Quaternion baseRotation{},writtenRotation{};bool pos=false,rot=false,scale=false;};std::vector<FullBone> fullBones;
  SupportState support,mainSupport;float mainTime=0,mainStart=0,mainEnd=0;bool mainPaused=false,mainRangeLoop=false,mainScrubbing=false,mainStopped=false,partnerStopped=false;std::shared_ptr<ImportedAnimation::Clip> controlledClip;std::vector<CustomBone> customBones;std::shared_ptr<ImportedAnimation::Clip> clip;
 } pose;
-bool WalkBones(void* root,int actor,Pins& pins,std::vector<Pose::FullBone>& result){int budget=1200;auto walk=[&](auto&& self,void* node,const std::string& path,int depth,bool inSkeleton)->void{if(!node||depth>48||budget--<=0)return;auto name=ObjectName(node);bool externalNode=std::any_of(externalParts.begin(),externalParts.end(),[&](auto& p){return p.backend=="unity_transform"&&p.bone==name&&p.character==(actor?workflow.draft.target:lastControlled);});bool isSkeleton=inSkeleton||name.starts_with("Bip001")||externalNode;if(depth==0||isSkeleton){Pose::FullBone bone;bone.info={std::to_string(actor)+"|"+path,depth==0?"@root":name,externalNode?"模型骨架":Bones::Group(depth==0?"@root":name),actor,depth};bone.bone=node;bone.root=root;result.push_back(bone);}int count=0;if(!Value(ChildCount,node,count)||count<0||count>2048)return;std::map<std::string,int> siblings;for(int i=0;i<count&&budget>0;++i){void* args[]{&i};auto child=pins.Keep(Call(Child,node,args));if(!child)continue;auto childName=ObjectName(child);auto segment=childName+"["+std::to_string(siblings[childName]++)+"]";self(self,child,path=="@root"?segment:path+"/"+segment,depth+1,isSkeleton);}};walk(walk,root,"@root",0,false);return budget>0;}
+bool WalkBones(void* root,int actor,Pins& pins,std::vector<Pose::FullBone>& result,bool includeAll=false){int budget=1200;auto walk=[&](auto&& self,void* node,const std::string& path,int depth,bool inSkeleton)->void{if(!node||depth>48||budget--<=0)return;auto name=ObjectName(node);bool externalNode=std::any_of(externalParts.begin(),externalParts.end(),[&](auto& p){return p.backend=="unity_transform"&&p.bone==name&&p.character==(actor?workflow.draft.target:lastControlled);});bool isSkeleton=inSkeleton||name.starts_with("Bip001")||externalNode;if(depth==0||isSkeleton||includeAll){Pose::FullBone bone;bone.info={std::to_string(actor)+"|"+path,depth==0?"@root":name,externalNode?"模型骨架":Bones::Group(depth==0?"@root":name),actor,depth};bone.bone=node;bone.root=root;result.push_back(bone);}int count=0;if(!Value(ChildCount,node,count)||count<0||count>2048)return;std::map<std::string,int> siblings;for(int i=0;i<count&&budget>0;++i){void* args[]{&i};auto child=pins.Keep(Call(Child,node,args));if(!child)continue;auto childName=ObjectName(child);auto segment=childName+"["+std::to_string(siblings[childName]++)+"]";self(self,child,path=="@root"?segment:path+"/"+segment,depth+1,isSkeleton);}};walk(walk,root,"@root",0,false);return budget>0;}
 void Event(const char* status){Log(std::string("Pose status: ")+status);panelStatus=status;if(host&&host->emit){const std::string json=std::string("{\"pose_status\":\"")+status+"\"}";host->emit(host->context,json.c_str());}}
 void CharacterMismatch(const char* status,const std::string& controlled,const std::string& target,const std::string& actual={},bool missing=false){std::string detail;if(std::string(status)=="preset_controlled_character_mismatch")detail="請將主控切換為「"+CharacterNames::Name(controlled)+"」；互動角色需為「"+CharacterNames::Name(target)+"」";else if(missing)detail="請將「"+CharacterNames::Name(target)+"」加入隊伍作為互動角色，再更新隊伍角色；若有重複實例，請重新掃描";else detail="此動畫需要互動角色「"+CharacterNames::Name(target)+"」，請選擇並套用該角色";if(!actual.empty())detail+="；目前為「"+CharacterNames::Name(actual)+"」";Log(std::string(status)+": "+detail);panelStatus=detail;if(host&&host->emit){auto data=Presets::Json{{"pose_status",status},{"detail",detail},{"required_controlled",controlled},{"required_target",target},{"actual_character",actual}}.dump();host->emit(host->context,data.c_str());}}
 
@@ -300,6 +300,31 @@ void FindHead(void* transform,int depth,int& budget,Pins& pins,std::vector<void*
  int count=0;if(!Value(ChildCount,transform,count)||count<0||count>2048)return;
  for(int i=0;i<count&&budget>0;++i){void* args[]{&i};FindHead(pins.Keep(Call(Child,transform,args)),depth+1,budget,pins,found);}
 }
+bool IsPrimarySkeletonPath(const std::string& key,int actor){
+ const auto prefix=std::to_string(actor)+"|";
+ return key==prefix+"Root[0]/Bip001[0]"||key==prefix+"Bip001[0]";
+}
+void* FindBodyHead(void* root,Pins& pins){
+ std::vector<void*> found;int budget=1200;
+ FindHead(root,0,budget,pins,found);
+ if(budget<=0||found.empty())return nullptr;
+ if(found.size()==1)return found.front();
+ std::vector<Pose::FullBone> catalog;
+ if(!WalkBones(root,0,pins,catalog,true))return nullptr;
+ std::string skeleton;
+ for(const auto& entry:catalog)if(entry.info.name=="Bip001"&&IsPrimarySkeletonPath(entry.info.key,0)){
+  if(!skeleton.empty())return nullptr;
+  skeleton=entry.info.key;
+ }
+ if(skeleton.empty())return nullptr;
+ void* head=nullptr;
+ for(const auto& entry:catalog)if(entry.info.key.starts_with(skeleton+"/")&&
+     std::find(found.begin(),found.end(),entry.bone)!=found.end()){
+  if(head)return nullptr;
+  head=entry.bone;
+ }
+ return head;
+}
 void* Squad(Pins& pins,int& count){
  if(!squad.field_info)return nullptr;
  auto player=pins.Keep(Call(Player));
@@ -316,9 +341,9 @@ bool BindLookTarget(Pose& candidate){
   if(!selectedIdentity.empty()){if(Presets::Identity(ObjectName(go))!=selectedIdentity)return;}
   else if(selectedSlot>=0){if(slot!=selectedSlot||ObjectName(go)!=selectedModel)return;}
   else if(Presets::Identity(ObjectName(go))!="chr_0004_pelica")return;
-  auto root=pins.Keep(Call(GoTransform,go));std::vector<void*> found;int budget=1200;
-  FindHead(root,0,budget,pins,found);if(found.size()!=1||budget<=0)return;
-  candidate.targetEntity=entity;candidate.targetModel=go;candidate.targetHead=found[0];++matches;
+  auto root=pins.Keep(Call(GoTransform,go));auto head=FindBodyHead(root,pins);
+  if(!head)return;
+  candidate.targetEntity=entity;candidate.targetModel=go;candidate.targetHead=head;++matches;
  });
  candidate.parent=pins.Keep(Call(Parent,candidate.head));
  if(matches!=1||!Living(candidate.parent)){Log("LookAt refused: unique instantiated Endministrator head not found in squad");Event("target_missing_or_ambiguous");return false;}
@@ -369,9 +394,9 @@ bool BeginPose(Mode mode=Mode::HeadTest){
   if(root&&root==modelRoot){candidate.root=root;++bodies;}
  }
  if(bodies!=1){Log("Head test refused: body Animator on model root is ambiguous/missing");Event("body_animator_ambiguous");return false;}
- std::vector<void*> found;int budget=1200;FindHead(candidate.root,0,budget,pins,found);
- if(found.size()!=1||budget<=0){Log("Head test refused: unique Head under Neck not verified");Event("head_ambiguous");return false;}
- candidate.head=found[0];if(!Rotation(candidate.head,candidate.base))return false;
+ candidate.head=FindBodyHead(candidate.root,pins);
+ if(!candidate.head){Log("Head test refused: unique Head under Neck not verified");Event("head_ambiguous");return false;}
+ if(!Rotation(candidate.head,candidate.base))return false;
  candidate.mode=mode;
  if(mode!=Mode::HeadTest&&!BindLookTarget(candidate))return false;
  if(IsDual(mode)){
@@ -453,21 +478,77 @@ bool BeginPose(Mode mode=Mode::HeadTest){
   candidate.mainEnd=candidate.controlledClip?candidate.controlledClip->duration:0;
   if(candidate.controlledClip||controlledPose!="inherit"){candidate.clip=std::make_shared<ImportedAnimation::Clip>(*candidate.clip);candidate.clip->managerAction=candidate.controlledClip||controlledPose=="imported"?"none":controlledPose;}
   if(candidate.clip->absolute&&(!experimentalPartnerUnbound||candidate.clip->targetActor==0)&&candidate.clip->targetCharacter!=Presets::Identity(ObjectName(candidate.clip->targetActor==0?candidate.model:candidate.targetModel))){CharacterMismatch("custom_target_character_mismatch",workflow.draft.controlled,candidate.clip->targetCharacter,Presets::Identity(ObjectName(candidate.targetModel)));return false;}
-  for(int actor=0;actor<2;++actor){auto actorClip=actor==0&&candidate.controlledClip?candidate.controlledClip:candidate.clip;void* root=actor==0?candidate.root:candidate.reverse.root;std::map<std::string,std::vector<void*>> nodes;int budget=1200;auto walk=[&](auto&& self,void* bone,int depth)->void{if(!bone||depth>48||budget--<=0)return;nodes[ObjectName(bone)].push_back(bone);int count=0;if(!Value(ChildCount,bone,count)||count<0||count>2048)return;for(int i=0;i<count&&budget>0;++i){void* args[]{&i};self(self,pins.Keep(Call(Child,bone,args)),depth+1);}};walk(walk,root,0);if(budget<=0){Event("custom_skeleton_too_large");return false;}
-   for(size_t i=0;i<actorClip->tracks.size();++i){auto& track=actorClip->tracks[i];if(track.actor!=actor)continue;auto found=nodes.find(track.bone);if(found==nodes.end()||found->second.size()!=1){Event("custom_bone_missing_or_ambiguous");return false;}Pose::CustomBone bone;bone.bone=found->second[0];bone.root=root;bone.track=i;bone.actor=actor;if(!Rotation(bone.bone,bone.rest)){Event("custom_rotation_unavailable");return false;}bone.base=bone.rest;if(!track.keys.empty()&&track.keys.front().position){if(!Value(LocalPosition,bone.bone,bone.positionBase))return false;}candidate.customBones.push_back(bone);}
-   auto uniqueNode=[&](const std::string& name)->void*{auto it=nodes.find(name);return it!=nodes.end()&&it->second.size()==1?it->second[0]:nullptr;};
+  for(int actor=0;actor<2;++actor){
+   const auto actorClip=actor==0&&candidate.controlledClip?candidate.controlledClip:candidate.clip;
+   void* root=actor==0?candidate.root:candidate.reverse.root;
+   std::vector<Pose::FullBone> catalog;
+   if(!WalkBones(root,actor,pins,catalog,true)){Event("custom_skeleton_too_large");return false;}
+   std::map<std::string,std::vector<void*>> nodes;
+   std::map<std::string,void*> paths;
+   std::map<void*,std::string> nodePaths;
+   for(const auto& entry:catalog){
+    nodes[ObjectName(entry.bone)].push_back(entry.bone);
+    paths.emplace(entry.info.key,entry.bone);
+    nodePaths.emplace(entry.bone,entry.info.key);
+   }
+   const auto character=Presets::Identity(ObjectName(actor==0?candidate.model:candidate.targetModel));
+   const auto& skeletons=nodes["Bip001"];
+   auto skeletonPath=skeletons.size()==1?nodePaths.at(skeletons.front()):std::string{};
+   if(skeletons.size()>1)for(auto node:skeletons){
+    const auto& key=nodePaths.at(node);
+    if(!IsPrimarySkeletonPath(key,actor))continue;
+    if(!skeletonPath.empty()){skeletonPath.clear();break;}
+    skeletonPath=key;
+   }
+   auto uniqueNode=[&](const std::string& name)->void*{
+    auto it=nodes.find(name);
+    if(it==nodes.end())return nullptr;
+    if(it->second.size()==1)return it->second.front();
+    if(skeletonPath.empty())return nullptr;
+    void* match=nullptr;
+    for(auto node:it->second){
+     const auto& path=nodePaths.at(node);
+     if(path==skeletonPath||path.starts_with(skeletonPath+"/")){
+      if(match)return nullptr;
+      match=node;
+     }
+    }
+    return match;
+   };
+   for(size_t i=0;i<actorClip->tracks.size();++i){
+    const auto& track=actorClip->tracks[i];
+    if(track.actor!=actor)continue;
+    auto byPath=paths.find(track.bonePath);
+    void* target=actorClip->absolute&&actorClip->targetCharacter==character&&
+       byPath!=paths.end()&&ObjectName(byPath->second)==track.bone?byPath->second:uniqueNode(track.bone);
+    if(!target){
+     const auto found=nodes.find(track.bone);
+     const bool missing=found==nodes.end();
+     const auto role=actor==0?"controlled":"partner";
+     Log(std::string("Playback bone binding: ")+role+" "+character+" "+track.bone+
+         (missing?" missing":" ambiguous"));
+     if(!missing)for(auto node:found->second)Log("Playback bone candidate: "+nodePaths.at(node));
+     Event("custom_bone_missing_or_ambiguous");
+     panelStatus=std::string(actor==0?"主控":"配角")+(missing?"缺少骨頭 ":"骨頭重名 ")+track.bone+" ("+character+")";
+     return false;
+    }
+    Pose::CustomBone bone;bone.bone=target;bone.root=root;bone.track=i;bone.actor=actor;if(!Rotation(bone.bone,bone.rest)){Event("custom_rotation_unavailable");return false;}bone.base=bone.rest;if(!track.keys.empty()&&track.keys.front().position){if(!Value(LocalPosition,bone.bone,bone.positionBase))return false;}candidate.customBones.push_back(bone);}
    if(actorClip->absolute){
     // Rotation-only tracks must not inherit idle translations. Unanimated ancestors
     // must also use a consistent local reference or their motion shifts the whole chain.
     std::vector<void*> chain;auto addChain=[&](void* node){for(int depth=0;node&&node!=root&&depth<48;++depth){if(std::find(chain.begin(),chain.end(),node)==chain.end())chain.push_back(node);node=pins.Keep(Call(Parent,node));}};
     addChain(uniqueNode("Bip001"));for(auto& bone:candidate.customBones)if(bone.actor==actor)addChain(bone.bone);
-    auto character=Presets::Identity(ObjectName(actor==0?candidate.model:candidate.targetModel));
-    for(auto node:chain){auto name=ObjectName(node);if(uniqueNode(name)!=node){Event("custom_bone_missing_or_ambiguous");return false;}
+    for(auto node:chain){auto name=ObjectName(node);
      auto existing=std::find_if(candidate.customBones.begin(),candidate.customBones.end(),[&](auto& bone){return bone.bone==node;});
      if(existing==candidate.customBones.end()){Pose::CustomBone hold;hold.bone=node;hold.root=root;hold.actor=actor;hold.track=actorClip->tracks.size();hold.holdRotation=true;if(!Rotation(node,hold.rest))return false;hold.base=hold.rest;candidate.customBones.push_back(hold);existing=std::prev(candidate.customBones.end());}
      bool positionTrack=existing->track<actorClip->tracks.size()&&actorClip->tracks[existing->track].keys.front().position.has_value();
      if(!positionTrack){existing->holdPosition=true;if(!Value(LocalPosition,node,existing->heldPosition))return false;existing->positionBase=existing->heldPosition;}
-     auto key=character+(name=="Bip001"?std::string{}:"|"+name);auto reference=skeletonReferences.find(key);
+     auto found=nodes.find(name);
+     if(found!=nodes.end()&&found->second.size()==1)
+      existing->referenceKey=character+(name=="Bip001"?std::string{}:"|"+name);
+     else if(auto path=nodePaths.find(node);path!=nodePaths.end())
+      existing->referenceKey=character+"|"+path->second;
+     auto reference=skeletonReferences.find(existing->referenceKey);
      if(reference!=skeletonReferences.end()){if(existing->holdPosition)existing->heldPosition=reference->second.position;if(existing->holdRotation)existing->rest=reference->second.rotation;}
     }
     Log("FBX stable local reference for "+character+": "+std::to_string(chain.size())+" animated-chain nodes");continue;
@@ -492,7 +573,7 @@ bool BeginPose(Mode mode=Mode::HeadTest){
  for(auto& a:candidate.arms)a.lease=a.root==candidate.root?candidate.lease:candidate.reverse.lease;
  for(auto& f:candidate.fingers)f.lease=f.root==candidate.root?candidate.lease:candidate.reverse.lease;
  if(candidate.clip)candidate.rangeEnd=candidate.clip->duration;candidate.started=GetTickCount64();pendingSeek.reset();pendingMainSeek.reset();pose=std::move(candidate);
- if(mode==Mode::Custom){bool changed=false;for(auto& bone:pose.customBones)if(bone.holdPosition||bone.holdRotation){auto character=Presets::Identity(ObjectName(bone.actor==0?pose.model:pose.targetModel));auto name=ObjectName(bone.bone);auto key=character+(name=="Bip001"?std::string{}:"|"+name);if(!skeletonReferences.contains(key)){PoseMath::Vector3 position{};if(Value(LocalPosition,bone.bone,position)){skeletonReferences[key]={bone.holdPosition?bone.heldPosition:position,bone.rest};changed=true;}}}if(changed&&!SavePanelSettings())Log("Skeleton reference cache save failed; retained for this session");sceneAuditPending=true;++sceneRevision;Log("Playback reference "+EncodeSkeletonReferences().dump());Event("custom_animation_on");return true;}
+ if(mode==Mode::Custom){bool changed=false;for(auto& bone:pose.customBones)if(!bone.referenceKey.empty()&&(bone.holdPosition||bone.holdRotation)){const auto& key=bone.referenceKey;if(!skeletonReferences.contains(key)){PoseMath::Vector3 position{};if(Value(LocalPosition,bone.bone,position)){skeletonReferences[key]={bone.holdPosition?bone.heldPosition:position,bone.rest};changed=true;}}}if(changed&&!SavePanelSettings())Log("Skeleton reference cache save failed; retained for this session");sceneAuditPending=true;++sceneRevision;Log("Playback reference "+EncodeSkeletonReferences().dump());Event("custom_animation_on");return true;}
  if(mode==Mode::Handshake){Log("Handshake contact IK ON; fixed calibration, measured shoulder alignment, 20s contact hold; palm proxy needs visual verification");Event("handshake_preview_on");return true;}
  Log(mode==Mode::HeadTest?"Head test ON: local yaw +20 degrees":mode==Mode::LookAt?"LookAt ON: Female Endministrator -> selected squad character":mode==Mode::Mutual?"Mutual LookAt ON: both leases acquired":"Standing PREVIEW ON: visual roots only, 1.2m spacing, 10 seconds; move to stop");Event(mode==Mode::HeadTest?"on":mode==Mode::LookAt?"lookat_on":mode==Mode::Mutual?"mutual_lookat_on":"standing_preview_on");return true;
 }
@@ -905,7 +986,7 @@ BE_Result BE_CALL Initialize(const BE_ThirdPartyHostV1* provided,const char* con
  bool loadedA=handshakeA.Load(moduleFolder/"motions/18.asf",moduleFolder/"motions/18_01.amc");
  bool loadedB=handshakeB.Load(moduleFolder/"motions/19.asf",moduleFolder/"motions/19_01.amc");
  Log(std::string("Handshake source assets: ")+(loadedA&&loadedB?"loaded":"unavailable"));
- Log("EndfieldAnimationImporter 3.6.7 initialized; follow research is read-only; verified preview modes retained");
+ Log("EndfieldAnimationImporter 3.6.9 initialized; follow research is read-only; verified preview modes retained");
  if(!offline){
   cameraDither.retryAt=0;
   cameraDither.reportedMissing=cameraDither.reportedFault=false;

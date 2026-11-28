@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-適用版本：3.6.7｜Windows x64
+適用版本：3.6.9｜Windows x64
 
 ## 使用前準備
 

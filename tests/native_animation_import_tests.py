@@ -149,6 +149,22 @@ def main():
         invoke(worker,root,"測試骨架.fbx",fbx())
         invoke(worker,root,"truncated.vmd",vmd()[:139],False)
         invoke(worker,root,"invalid.fbx",b"not an FBX",False)
+        target=reference()
+        driver=next(b for b in target["bones"] if b["key"]=="L_Thigh")
+        palette=target["mesh_bindposes"][0]["bones"]
+        bind=next(b for b in palette if b["key"]==driver["key"])
+        palette.remove(bind)
+        twist=dict(driver, key="thigh_twist", name=driver["name"]+"_SP_twist_0", parent_key=driver["key"])
+        target["bones"].append(twist)
+        palette.append(dict(bind, key=twist["key"], name=twist["name"]))
+        (root/"reference.json").write_text(json.dumps(target),encoding="utf-8")
+        for name, data in (("indirect-fbx.fbx",fbx()),("indirect-vmd.vmd",vmd())):
+            tracks=invoke(worker,root,name,data)
+            track=next(t for t in tracks if t["bone"]=="Bip001_L_Thigh")
+            assert track["bone_path"]=="L_Thigh"
+        twist["world_matrix"]=matrix(100,0,0)
+        (root/"reference.json").write_text(json.dumps(target),encoding="utf-8")
+        invoke(worker,root,"offset-twist.vmd",vmd(),False)
     print("PASS: native VMD and FBX motion, VMD leg and toe IK, Unicode paths and malformed inputs")
 
 

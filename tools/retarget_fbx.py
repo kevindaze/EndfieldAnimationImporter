@@ -46,7 +46,13 @@ def target_reference(data, actor=1):
     nodes = {b['key']: b for b in data['bones'] if b['actor'] == actor}
     # Facial/accessory joints are not part of this body retargeter. Validate
     # only body joints and their ancestors, not unrelated scaled eyelashes.
-    needed = {key for key, node in nodes.items() if node['name'].startswith('Bip001')}
+    skeletons = {key for key, node in nodes.items() if node['name'] == 'Bip001'}
+    primary = skeletons & {f'{actor}|Root[0]/Bip001[0]', f'{actor}|Bip001[0]'}
+    if len(primary) > 1:
+        raise ValueError('Ambiguous primary skeleton')
+    subsidiary = skeletons - primary if primary else set()
+    needed = {key for key, node in nodes.items() if node['name'].startswith('Bip001')
+              and not any(key == branch or key.startswith(branch + '/') for branch in subsidiary)}
     pending = list(needed)
     while pending:
         parent = nodes[pending.pop()].get('parent_key')
@@ -72,22 +78,60 @@ def target_reference(data, actor=1):
             current = matrix(node['world_matrix'])
         model[key] = rigid(inverse_root @ current)
     weighted = set()
+    bind_samples = {}
     for palette in palettes:
         to_model = matrix(palette['root_world_to_local']) @ matrix(palette['renderer_local_to_world'])
         for bone in palette['bones']:
             key = bone['key']
             if key not in nodes:
                 continue
-            if key in weighted:
+            node = nodes[key]
+            candidate_link = node['name'].endswith(('_SP_twist_0', '_bend_jnt')) or 'verified_local_bind' in node
+            if key in weighted and not candidate_link:
                 continue  # body palette wins over clothing/accessory palettes
             bind = matrix(bone['inverse_bind_matrix'])
             if abs(bind.determinant()) < 1e-12:
                 raise ValueError('Singular inverse bind pose')
-            model[key] = rigid(to_model @ bind.inverted())
-            weighted.add(key)
+            resolved = rigid(to_model @ bind.inverted())
+            if candidate_link:
+                bind_samples.setdefault(key, []).append(resolved)
+            if key not in weighted:
+                model[key] = resolved
+                weighted.add(key)
+    inferred = {}
+    for key, bones in bind_samples.items():
+        node = nodes[key]
+        driver = node.get('parent_key')
+        parent = nodes.get(driver)
+        if driver in weighted or not parent or parent['name'] not in REQUIRED or 'world_matrix' not in parent:
+            continue
+        link = node.get('verified_local_bind') if parent['name'] == 'Bip001_Pelvis' else None
+        if link:
+            q = link['rotation_xyzw']
+            inverse_link = Matrix.LocRotScale(Vector(link['position']),
+                Quaternion((q[3], q[0], q[1], q[2])).normalized(), None).inverted()
+        else:
+            if (node['name'] not in (parent['name'] + '_SP_twist_0', parent['name'] + '_bend_jnt')
+                    or 'world_matrix' not in node):
+                continue
+            parent_world = matrix(parent['world_matrix'])
+            child_world = matrix(node['world_matrix'])
+            if not all(abs(parent_world[r][c] - child_world[r][c]) <= 1e-4
+                       for r in range(3) for c in range(4)):
+                continue
+            inverse_link = Matrix.Identity(4)
+        inferred.setdefault(driver, []).append([rigid(bone @ inverse_link) for bone in bones])
+    for driver, links in inferred.items():
+        need = 3 if nodes[driver]['name'] == 'Bip001_Pelvis' else 1
+        first = links[0][0]
+        if len(links) >= need and all(abs(first[r][c] - other[r][c]) <= 1e-3
+                for link in links for other in link for r in range(3) for c in range(4)):
+            model[driver] = first
+            weighted.add(driver)
     missing = [n for n in REQUIRED if n not in names or names[n] not in weighted]
     if missing:
-        raise ValueError('Target bind poses missing: '+', '.join(missing))
+        role = 'partner' if actor else 'controlled'
+        raise ValueError(f'Target {role} ({data[role]}) bind poses missing: ' + ', '.join(missing))
     return nodes, names, model, weighted
 
 
@@ -334,7 +378,7 @@ def run(args, loader=None, mapper=None, kind='fbx'):
                 if key==pelvis_key:
                     k['position']=[round(v,6) for v in p]
                 keys.append(k)
-            tracks.append({'bone':nodes[key]['name'],'keys':keys})
+            tracks.append({'bone':nodes[key]['name'],'bone_path':key,'keys':keys})
         data={'format':'endfield-interaction-animation','version':2,'rotation_space':'absolute_local',
               'target_character':character,'id':clip_id,'name':label,
               'duration':round(end-start,6),'distance':1.2,
